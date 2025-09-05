@@ -562,7 +562,9 @@ private:
     double parentUtility, double parentWeightPerVisit,
     bool isDuringSearch, bool antiMirror, double maxChildWeight,
     bool countEdgeVisit,
-    SearchThread* thread
+    SearchThread* thread,
+    bool forceMirrorPolicy,
+    Loc mirrorLoc
   ) const;
   double getNewExploreSelectionValue(
     const SearchNode& parent,

@@ -1960,6 +1960,7 @@ int MainCmds::gtp(const vector<string>& args) {
     analysisOut = params;
 
     genmoveOut.antiMirror = genmoveAntiMirror;
+    analysisOut.antiMirror = genmoveAntiMirror;
     analysisOut.wideRootNoise = analysisWideRootNoise;
     analysisOut.ignorePreRootHistory = analysisIgnorePreRootHistory;
   };

@@ -1,7 +1,7 @@
 #include "../search/search.h"
 
 #include "../search/searchnode.h"
-
+#include "../neuralnet/nninputs.h"  // 添加这一行，用于SymmetryHelpers类
 //------------------------
 #include "../core/using.h"
 //------------------------
@@ -18,6 +18,52 @@ static double cpuctExplorationHuman(double totalChildWeight, const SearchParams&
 //Tiny constant to add to numerator of puct formula to make it positive
 //even when visits = 0.
 static constexpr double TOTALCHILDWEIGHT_PUCT_OFFSET = 0.01;
+
+// 检查棋盘是否完全对称（即黑白棋子构成完全对称局面）
+static bool isBoardCompletelySymmetric(const Board& board) {
+  // 检查棋盘大小是否允许完全对称
+  if (board.x_size != board.y_size) {
+    return false;  // 非正方形棋盘不可能完全对称
+  }
+  
+  // 检查每个位置是否与其镜像位置对称
+  for (int y = 0; y < board.y_size; y++) {
+    for (int x = 0; x < board.x_size; x++) {
+      Loc loc = Location::getLoc(x, y, board.x_size);
+      // 获取镜像位置（中心对称）
+      int mirrorX = board.x_size - x - 1;
+      int mirrorY = board.y_size - y - 1;
+      Loc mirrorLoc = Location::getLoc(mirrorX, mirrorY, board.x_size);
+      
+      // 检查颜色是否相反（黑对白，白对黑，空对空）
+      if (board.colors[loc] != C_EMPTY && board.colors[mirrorLoc] != C_EMPTY) {
+        if (board.colors[loc] == board.colors[mirrorLoc]) {
+          return false;  // 相同颜色不构成对称
+        }
+      }
+      else if (board.colors[loc] != board.colors[mirrorLoc]) {
+        return false;  // 一个为空一个不为空不构成对称
+      }
+    }
+  }
+  
+  return true;  // 棋盘完全对称
+}
+
+// 检查在指定位置落子后是否能构成完全对称局面
+static bool canFormCompleteSymmetryAfterMove(const Board& board, Loc moveLoc, Player pla) {
+  // 创建棋盘副本
+  Board testBoard = board;
+  
+  // 在指定位置落子
+  if (!testBoard.isLegal(moveLoc, pla, true)) {
+    return false;  // 非法走法
+  }
+  testBoard.playMoveAssumeLegal(moveLoc, pla);
+  
+  // 检查落子后的棋盘是否完全对称
+  return isBoardCompletelySymmetric(testBoard);
+}
 
 double Search::getExploreScaling(
   double totalChildWeight, double parentUtilityStdevFactor
@@ -106,7 +152,9 @@ double Search::getExploreSelectionValueOfChild(
   double parentUtility, double parentWeightPerVisit,
   bool isDuringSearch, bool antiMirror, double maxChildWeight,
   bool countEdgeVisit,
-  SearchThread* thread
+  SearchThread* thread,
+  bool forceMirrorPolicy,
+  Loc mirrorLoc
 ) const {
   (void)parentUtility;
   int movePos = getPos(moveLoc);
@@ -148,6 +196,20 @@ double Search::getExploreSelectionValueOfChild(
     double virtualLossWeightFrac = (double)virtualLossWeight / (virtualLossWeight + std::max(0.25,childWeight));
     childUtility = childUtility + (virtualLossUtility - childUtility) * virtualLossWeightFrac;
     childWeight += virtualLossWeight;
+  }
+
+  // Apply mirror policy bonus if forceMirrorPolicy is true and this is the mirror move
+  if(isDuringSearch && forceMirrorPolicy && moveLoc == mirrorLoc) {
+    // Add 20% win rate bonus to the mirror move's utility for selection purposes only
+    // This doesn't change the actual win rate stored in the node
+    double winRateBonus = 0.30;
+    if(parent.nextPla == P_WHITE)
+      childUtility += winRateBonus;
+    else
+      childUtility -= winRateBonus;
+
+    // Clamp to prevent overflow beyond theoretical utility bounds [-1, 1]
+    childUtility = std::max(-1.0, std::min(1.0, childUtility));
   }
 
   if(isDuringSearch && (&parent == rootNode) && countEdgeVisit) {
@@ -451,6 +513,71 @@ void Search::selectBestChildToDescend(
   bool posesWithChildBuf[NNPos::MAX_NN_POLICY_SIZE] = { }; // Initialize all to false
   bool antiMirror = searchParams.antiMirror && mirroringPla != C_EMPTY && isMirroringSinceSearchStart(thread.history,0);
 
+  // Check for forced mirror policy allocation when white plays
+  bool forceMirrorPolicy = false;
+  Loc mirrorLoc = Board::NULL_LOC;
+  if(node.nextPla == P_WHITE) {
+    // Check if white should be forced to mirror black's moves
+    int xSize = thread.board.x_size;
+    int ySize = thread.board.y_size;
+    if(thread.history.moveHistory.size() > 0) {
+      Loc prevLoc = thread.history.moveHistory[thread.history.moveHistory.size()-1].loc;
+      if(prevLoc != Board::PASS_LOC) {
+        mirrorLoc = Location::getMirrorLoc(prevLoc, xSize, ySize);
+        if(mirrorLoc != Board::NULL_LOC && mirrorLoc != Board::PASS_LOC &&
+           policyProbs[getPos(mirrorLoc)] >= 0 &&
+           thread.board.isLegal(mirrorLoc, node.nextPla, true)) {
+          // 添加条件：只有在镜像走法能构成完全对称局面时才采用镜像策略
+          if (canFormCompleteSymmetryAfterMove(thread.board, mirrorLoc, node.nextPla)) {
+            forceMirrorPolicy = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Force mirror policy allocation if conditions are met
+  if(forceMirrorPolicy && mirrorLoc != Board::NULL_LOC) {
+    float* mutablePolicyProbs = const_cast<float*>(policyProbs);
+
+    // Calculate required policy adjustment
+    // 添加指数衰减系数，随棋局的进行衰减
+    int currentTurnNumber = thread.history.getCurrentTurnNumber();
+    // 设置衰减参数：初始值为1.0，衰减率为0.01（每回合衰减1%）
+    float decayRate = 0.01f;
+    float mirrorProb = expf(-decayRate * currentTurnNumber);  // 指数衰减
+    
+    int mirrorPos = getPos(mirrorLoc);
+    // 确保mirrorProb不会太低，设置最小值
+    float originalPolicy = mutablePolicyProbs[mirrorPos];
+    mirrorProb = std::max(mirrorProb, std::max(0.5f, originalPolicy));
+    
+    float remainingProb = 1.00f - mirrorProb;  // total for other moves
+
+    // Find all legal moves and calculate current total probability
+    float totalLegalProb = 0.0f;
+    int legalMoveCount = 0;
+    for(int pos = 0; pos<policySize; pos++) {
+      if(mutablePolicyProbs[pos] >= 0) {
+        totalLegalProb += mutablePolicyProbs[pos];
+        legalMoveCount++;
+      }
+    }
+
+    // Avoid division by zero
+    if(totalLegalProb > 0.0f && legalMoveCount > 1) {
+      // For moves except mirror move, scale them proportionally to make their total = remainingProb
+      float scaleFactor = remainingProb / (totalLegalProb - mutablePolicyProbs[mirrorPos]);
+      for(int pos = 0; pos<policySize; pos++) {
+        if(pos != mirrorPos && mutablePolicyProbs[pos] >= 0) {
+          mutablePolicyProbs[pos] *= scaleFactor;
+        }
+      }
+      // Set mirror move to mirrorProb
+      mutablePolicyProbs[mirrorPos] = mirrorProb;
+    }
+  }
+
   double exploreScaling;
   if(useHumanSL)
     exploreScaling = getExploreScalingHuman(totalChildWeight);
@@ -478,7 +605,9 @@ void Search::selectBestChildToDescend(
       parentUtility,parentWeightPerVisit,
       isDuringSearch,antiMirror,maxChildWeight,
       countEdgeVisit,
-      &thread
+      &thread,
+      forceMirrorPolicy,
+      mirrorLoc
     );
     if(selectionValue > maxSelectionValue) {
       // if(child->state.load(std::memory_order_seq_cst) == SearchNode::STATE_EVALUATING) {

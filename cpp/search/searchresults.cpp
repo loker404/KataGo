@@ -168,7 +168,9 @@ bool Search::getPlaySelectionValues(
       parentUtility,parentWeightPerVisit,
       isDuringSearch,false,nonLCBBestChildWeight,
       countEdgeVisit,
-      NULL
+      NULL,
+      false,
+      Board::NULL_LOC
     );
 
     for(int i = 0; i<numChildren; i++) {
