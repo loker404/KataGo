@@ -507,8 +507,13 @@ class Metrics:
 
         target_policy_player = target_policy_ncmove[:, 0, :]
         target_policy_player = target_policy_player / torch.sum(target_policy_player, dim=1, keepdim=True)
-        target_policy_opponent = target_policy_ncmove[:, 1, :]
-        target_policy_opponent = target_policy_opponent / torch.sum(target_policy_opponent, dim=1, keepdim=True)
+        # 处理可能只有一个策略目标的情况（例如foxwq-npzs数据）
+        if target_policy_ncmove.shape[1] > 1:
+            target_policy_opponent = target_policy_ncmove[:, 1, :]
+            target_policy_opponent = target_policy_opponent / torch.sum(target_policy_opponent, dim=1, keepdim=True)
+        else:
+            # 如果只有一个策略目标，使用相同的策略作为对手策略
+            target_policy_opponent = target_policy_player
         target_policy_player_soft = (target_policy_player + 1e-7) * policymask
         target_policy_player_soft = torch.pow(target_policy_player_soft, 0.25)
         target_policy_player_soft /= torch.sum(target_policy_player_soft, dim=1, keepdim=True)
@@ -516,26 +521,60 @@ class Metrics:
         target_policy_opponent_soft = torch.pow(target_policy_opponent_soft, 0.25)
         target_policy_opponent_soft /= torch.sum(target_policy_opponent_soft, dim=1, keepdim=True)
 
-        target_weight_policy_player = target_global_nc[:, 26]
-        target_weight_policy_opponent = target_global_nc[:, 28]
+        # 处理可能缺少某些目标权重的情况（例如foxwq-npzs数据）
+        if target_global_nc.shape[1] > 26:
+            target_weight_policy_player = target_global_nc[:, 26]
+        else:
+            # 如果没有足够的列，使用默认值
+            target_weight_policy_player = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+            
+        if target_global_nc.shape[1] > 28:
+            target_weight_policy_opponent = target_global_nc[:, 28]
+        else:
+            # 如果没有足够的列，使用默认值
+            target_weight_policy_opponent = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
 
         target_value = target_global_nc[:, 0:3]
-        target_scoremean = target_global_nc[:, 3]
-        target_td_value = torch.stack(
-            (target_global_nc[:, 4:7], target_global_nc[:, 8:11], target_global_nc[:, 12:15]), dim=1
-        )
-        target_td_score = torch.cat(
-            (target_global_nc[:, 7:8], target_global_nc[:, 11:12], target_global_nc[:, 15:16]), dim=1
-        )
-        target_lead = target_global_nc[:, 21]
-        target_variance_time = target_global_nc[:, 22]
-        global_weight = target_global_nc[:, 25]
-        target_weight_ownership = target_global_nc[:, 27]
-        target_weight_lead = target_global_nc[:, 29]
-        target_weight_futurepos = target_global_nc[:, 33]
-        target_weight_scoring = target_global_nc[:, 34]
-        target_weight_value = 1.0 - target_global_nc[:, 35]
-        target_weight_td_value = 1.0 - target_global_nc[:, 24]
+        target_scoremean = target_global_nc[:, 3] if target_global_nc.shape[1] > 3 else torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
+        
+        # 处理可能缺少某些目标权重的情况（例如foxwq-npzs数据）
+        if target_global_nc.shape[1] > 15:
+            target_td_value = torch.stack(
+                (target_global_nc[:, 4:7], target_global_nc[:, 8:11], target_global_nc[:, 12:15]), dim=1
+            )
+            target_td_score = torch.cat(
+                (target_global_nc[:, 7:8], target_global_nc[:, 11:12], target_global_nc[:, 15:16]), dim=1
+            )
+        else:
+            # 如果没有足够的列，创建默认值
+            target_td_value = torch.zeros(target_global_nc.shape[0], 3, 3, device=target_global_nc.device)
+            target_td_score = torch.zeros(target_global_nc.shape[0], 3, device=target_global_nc.device)
+            
+        target_lead = target_global_nc[:, 21] if target_global_nc.shape[1] > 21 else torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
+        target_variance_time = target_global_nc[:, 22] if target_global_nc.shape[1] > 22 else torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
+        
+        if target_global_nc.shape[1] > 25:
+            global_weight = target_global_nc[:, 25]
+        else:
+            # 如果没有足够的列，使用默认值
+            global_weight = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+            
+        target_weight_ownership = target_global_nc[:, 27] if target_global_nc.shape[1] > 27 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+        target_weight_lead = target_global_nc[:, 29] if target_global_nc.shape[1] > 29 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+        target_weight_futurepos = target_global_nc[:, 33] if target_global_nc.shape[1] > 33 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+        target_weight_scoring = target_global_nc[:, 34] if target_global_nc.shape[1] > 34 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+        
+        if target_global_nc.shape[1] > 35:
+            target_weight_value = 1.0 - target_global_nc[:, 35]
+        else:
+            # 如果没有足够的列，使用默认值
+            target_weight_value = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+            
+        if target_global_nc.shape[1] > 24:
+            target_weight_td_value = 1.0 - target_global_nc[:, 24]
+        else:
+            # 如果没有足够的列，使用默认值
+            target_weight_td_value = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
 
         target_score_distribution = score_distribution_ns / 100.0
 
@@ -653,13 +692,24 @@ class Metrics:
             # Short-term optimistic policy. Weight policy by:
             # The shortterm value outcome being around 1.5 sigma more than expected
             # Add a small amount to the variance to avoid division by zero or overly small numbers
-            shortterm_value_actual = target_global_nc[:, 12] - target_global_nc[:, 13]
+            # 处理可能缺少某些目标权重的情况（例如foxwq-npzs数据）
+            if target_global_nc.shape[1] > 13:
+                shortterm_value_actual = target_global_nc[:, 12] - target_global_nc[:, 13]
+            else:
+                # 如果没有足够的列，使用默认值
+                shortterm_value_actual = torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
+                
             shortterm_value_pred = torch.nn.functional.softmax(td_value_logits[:, 2, :].detach(), dim=1)
             shortterm_value_pred = shortterm_value_pred[:, 0] - shortterm_value_pred[:, 1]
             shortterm_value_stdevs_excess = (shortterm_value_actual - shortterm_value_pred) / torch.sqrt(pred_shortterm_value_error.detach() + 0.0001)
             # Or the shortterm score outcome being around 1.5 sigma more than expected
             # Add a small amount to the variance to avoid division by zero or overly small numbers
-            shortterm_score_stdevs_excess = (target_global_nc[:, 15] - pred_td_score[:,2].detach()) / torch.sqrt(pred_shortterm_score_error.detach() + 0.25)
+            # 处理可能缺少某些目标权重的情况（例如foxwq-npzs数据）
+            if target_global_nc.shape[1] > 15:
+                shortterm_score_stdevs_excess = (target_global_nc[:, 15] - pred_td_score[:,2].detach()) / torch.sqrt(pred_shortterm_score_error.detach() + 0.25)
+            else:
+                # 如果没有足够的列，使用默认值
+                shortterm_score_stdevs_excess = torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
             target_weight_shortoptimistic_policy = torch.clamp(
                 torch.sigmoid((shortterm_value_stdevs_excess - 1.5) * 3.0) + torch.sigmoid((shortterm_score_stdevs_excess - 1.5) * 3.0),
                 min=0.0,

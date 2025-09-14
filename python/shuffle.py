@@ -24,23 +24,33 @@ import numpy as np
 EXPECTED_Q_VALUE_TARGETS_NCMOVE_CHANNELS = 3
 
 def assert_keys(npz, include_meta, include_qvalues):
-    keys = [
+    # 必需的键
+    required_keys = [
         "binaryInputNCHWPacked",
         "globalInputNC",
         "policyTargetsNCMove",
         "globalTargetsNC",
+    ]
+    # 可选但通常期望的键
+    optional_keys = [
         "scoreDistrN",
         "valueTargetsNCHW",
     ]
-    if include_meta:
-        keys.append("metadataInputNC")
+    # 检查必需的键是否存在
+    for key in required_keys:
+        assert key in npz, f"Missing required key: {key}"
     # We don't require qValueTargetsNCMove even if include_qvalues is True
     # since we'll handle missing values by filling with zeros
-    expected_keys = set(keys)
+    expected_keys = set(required_keys + optional_keys)
     actual_keys = set(npz.keys())
+    if include_meta and "metadataInputNC" in actual_keys:
+        expected_keys.add("metadataInputNC")
     if include_qvalues and "qValueTargetsNCMove" in actual_keys:
         expected_keys.add("qValueTargetsNCMove")
-    assert(actual_keys == expected_keys)
+    # 允许实际键是期望键的子集或超集（处理向后兼容性）
+    # 只要包含所有必需的键就可以了
+    missing_required = expected_keys.intersection(required_keys) - actual_keys.intersection(required_keys)
+    assert len(missing_required) == 0, f"Missing required keys: {missing_required}"
 
 def is_temp_npz_like(filename):
     return "_" in filename
@@ -81,9 +91,25 @@ def shardify(input_idx, input_file_group, num_out_files, out_tmp_dirs, keep_prob
                 globalInputNCList.append(npz["globalInputNC"])
                 policyTargetsNCMoveList.append(npz["policyTargetsNCMove"])
                 globalTargetsNCList.append(npz["globalTargetsNC"])
-                scoreDistrNList.append(npz["scoreDistrN"])
-                valueTargetsNCHWList.append(npz["valueTargetsNCHW"])
-                metadataInputNCList.append(npz["metadataInputNC"] if include_meta else None)
+                # 处理可能缺失的键
+                if "scoreDistrN" in npz:
+                    scoreDistrNList.append(npz["scoreDistrN"])
+                else:
+                    # Create zeros array with appropriate shape
+                    scoreDistrNList.append(np.zeros((npz["globalTargetsNC"].shape[0], 2 * (19 * 19 + 60)), dtype=np.float32))
+                if "valueTargetsNCHW" in npz:
+                    valueTargetsNCHWList.append(npz["valueTargetsNCHW"])
+                else:
+                    # Create zeros array with appropriate shape
+                    valueTargetsNCHWList.append(np.zeros((npz["globalTargetsNC"].shape[0], 5, 19, 19), dtype=np.float32))
+                if include_meta:
+                    if "metadataInputNC" in npz:
+                        metadataInputNCList.append(npz["metadataInputNC"])
+                    else:
+                        # Create zeros array with appropriate shape
+                        metadataInputNCList.append(np.zeros((npz["globalTargetsNC"].shape[0], 164), dtype=np.float32))
+                else:
+                    metadataInputNCList.append(None)
                 if include_qvalues:
                     if "qValueTargetsNCMove" in npz:
                         assert npz["qValueTargetsNCMove"].shape[1] == EXPECTED_Q_VALUE_TARGETS_NCMOVE_CHANNELS
@@ -92,7 +118,7 @@ def shardify(input_idx, input_file_group, num_out_files, out_tmp_dirs, keep_prob
                         # Create zeros array with shape matching policyTargetsNCMove but with different C dimension
                         shape = list(npz["policyTargetsNCMove"].shape)
                         shape[1] = EXPECTED_Q_VALUE_TARGETS_NCMOVE_CHANNELS
-                        qValueTargetsNCMoveList.append(np.zeros(shape, dtype=np.int16))
+                        qValueTargetsNCMoveList.append(np.zeros(shape, dtype=np.float32))
                 else:
                     qValueTargetsNCMoveList.append(None)
 
@@ -232,10 +258,33 @@ def merge_shards(filename, num_shards_to_merge, out_tmp_dir, batch_size, ensure_
                 globalInputNC = npz["globalInputNC"]
                 policyTargetsNCMove = npz["policyTargetsNCMove"]
                 globalTargetsNC = npz["globalTargetsNC"]
-                scoreDistrN = npz["scoreDistrN"]
-                valueTargetsNCHW = npz["valueTargetsNCHW"]
-                metadataInputNC = npz["metadataInputNC"] if include_meta else None
-                qValueTargetsNCMove = npz["qValueTargetsNCMove"] if include_qvalues else None
+                # 处理可能缺失的键
+                if "scoreDistrN" in npz:
+                    scoreDistrN = npz["scoreDistrN"]
+                else:
+                    # Create zeros array with appropriate shape
+                    scoreDistrN = np.zeros((globalTargetsNC.shape[0], 2 * (19 * 19 + 60)), dtype=np.float32)
+                if "valueTargetsNCHW" in npz:
+                    valueTargetsNCHW = npz["valueTargetsNCHW"]
+                else:
+                    # Create zeros array with appropriate shape
+                    valueTargetsNCHW = np.zeros((globalTargetsNC.shape[0], 5, 19, 19), dtype=np.float32)
+                if include_meta:
+                    if "metadataInputNC" in npz:
+                        metadataInputNC = npz["metadataInputNC"]
+                    else:
+                        # Create zeros array with appropriate shape
+                        metadataInputNC = np.zeros((globalTargetsNC.shape[0], 164), dtype=np.float32)
+                else:
+                    metadataInputNC = None
+                if include_qvalues:
+                    if "qValueTargetsNCMove" in npz:
+                        qValueTargetsNCMove = npz["qValueTargetsNCMove"]
+                    else:
+                        # Create zeros array with appropriate shape
+                        qValueTargetsNCMove = np.zeros((globalTargetsNC.shape[0], EXPECTED_Q_VALUE_TARGETS_NCMOVE_CHANNELS, 19 * 19 + 1), dtype=np.float32)
+                else:
+                    qValueTargetsNCMove = None
 
                 binaryInputNCHWPackeds.append(binaryInputNCHWPacked)
                 globalInputNCs.append(globalInputNC)

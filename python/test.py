@@ -118,6 +118,10 @@ def main(args):
 
     metrics_obj = Metrics(batch_size,world_size,model)
 
+    # Initialize swa_model if not already done
+    if 'swa_model' not in locals():
+        swa_model = None
+
     # METRICS -----------------------------------------------------------------------------------
     def detensorify_metrics(metrics):
         ret = {}
@@ -202,21 +206,21 @@ def main(args):
             if max_batches is not None and num_batches_tested >= max_batches:
                 break
 
-            start = torch.cuda.Event(enable_timing=True)
-            end = torch.cuda.Event(enable_timing=True)
+            # start = torch.cuda.Event(enable_timing=True)
+            # end = torch.cuda.Event(enable_timing=True)
 
             extra_outputs = ExtraOutputs(norm_layer_names)
             # if model.get_has_metadata_encoder():
             #     extra_outputs.add_requested([MetadataEncoder.OUTMEAN_KEY,MetadataEncoder.OUTLOGVAR_KEY])
 
-            start.record()
+            # start.record()
             if swa_model is not None:
                 model_outputs = swa_model(batch["binaryInputNCHW"],batch["globalInputNC"],extra_outputs=extra_outputs)
             else:
                 model_outputs = model(batch["binaryInputNCHW"],batch["globalInputNC"],extra_outputs=extra_outputs)
-            end.record()
-            torch.cuda.synchronize()
-            time_elapsed = start.elapsed_time(end) / 1000.0
+            # end.record()
+            # torch.cuda.synchronize()
+            time_elapsed = 0.0  # Placeholder when not using CUDA
 
             if list_available_outputs:
                 for available_output in extra_outputs.available:

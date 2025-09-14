@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional
 
 import modelconfigs
+from model_pytorch import EXTRA_SCORE_DISTR_RADIUS
 
 def read_npz_training_data(
     npz_files,
@@ -33,14 +34,31 @@ def read_npz_training_data(
             globalInputNC = npz["globalInputNC"]
             policyTargetsNCMove = npz["policyTargetsNCMove"].astype(np.float32)
             globalTargetsNC = npz["globalTargetsNC"]
-            scoreDistrN = npz["scoreDistrN"].astype(np.float32)
-            valueTargetsNCHW = npz["valueTargetsNCHW"].astype(np.float32)
+            # 处理可能缺失的键
+            if "scoreDistrN" in npz:
+                scoreDistrN = npz["scoreDistrN"].astype(np.float32)
+            else:
+                # 创建默认的scoreDistrN数组
+                scoreDistrN = np.zeros((globalTargetsNC.shape[0], 2 * (pos_len * pos_len + EXTRA_SCORE_DISTR_RADIUS)), dtype=np.float32)
+            if "valueTargetsNCHW" in npz:
+                valueTargetsNCHW = npz["valueTargetsNCHW"].astype(np.float32)
+            else:
+                # 创建默认的valueTargetsNCHW数组
+                valueTargetsNCHW = np.zeros((globalTargetsNC.shape[0], 5, pos_len, pos_len), dtype=np.float32)
             if include_meta:
-                metadataInputNC = npz["metadataInputNC"].astype(np.float32)
+                if "metadataInputNC" in npz:
+                    metadataInputNC = npz["metadataInputNC"].astype(np.float32)
+                else:
+                    # 创建默认的metadataInputNC数组
+                    metadataInputNC = np.zeros((globalTargetsNC.shape[0], 164), dtype=np.float32)
             else:
                 metadataInputNC = None
             if include_qvalues:
-                qValueTargetsNCMove = npz["qValueTargetsNCMove"].astype(np.float32)
+                if "qValueTargetsNCMove" in npz:
+                    qValueTargetsNCMove = npz["qValueTargetsNCMove"].astype(np.float32)
+                else:
+                    # 创建默认的qValueTargetsNCMove数组
+                    qValueTargetsNCMove = np.zeros((globalTargetsNC.shape[0], 3, pos_len * pos_len + 1), dtype=np.float32)
             else:
                 qValueTargetsNCMove = None
         del npz
@@ -242,8 +260,13 @@ def build_history_matrices(model_config: modelconfigs.ModelConfig, device):
 def apply_history_matrices(model_config, batch_binaryInputNCHW, batch_globalInputNC, batch_globalTargetsNC, h_base, h_builder):
     num_global_features = modelconfigs.get_num_global_input_features(model_config)
     # include_history = batch_globalTargetsNC[:,36:41]
-    should_stop_history = torch.rand_like(batch_globalTargetsNC[:,36:41]) >= 0.98
-    include_history = (torch.cumsum(should_stop_history,axis=1,dtype=torch.float32) <= 0.1).to(torch.float32)
+    # 检查batch_globalTargetsNC是否有足够的列来支持历史功能
+    if batch_globalTargetsNC.shape[1] >= 41:
+        should_stop_history = torch.rand_like(batch_globalTargetsNC[:,36:41]) >= 0.98
+        include_history = (torch.cumsum(should_stop_history,axis=1,dtype=torch.float32) <= 0.1).to(torch.float32)
+    else:
+        # 如果没有足够的列，创建默认的历史值
+        include_history = torch.zeros((batch_globalTargetsNC.shape[0], 5), device=batch_globalTargetsNC.device, dtype=torch.float32)
 
     # include_history: (N, 5)
     # bi * ijk -> bjk, (N, 5) * (5, n_bin, n_bin) -> (N, n_bin, n_bin)
