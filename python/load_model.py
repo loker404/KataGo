@@ -15,27 +15,51 @@ if packaging.version.parse(torch.__version__) > packaging.version.parse("2.4.0")
     torch.serialization.add_safe_globals([float])
 
 def load_model_state_dict(state_dict):
-    # Strip off any "module." from when the model was saved with DDP or other things
+    # Strip off any "module." or "_orig_mod." prefixes
     model_state_dict = {}
-    for key in state_dict["model"]:
-        old_key = key
-        while key.startswith("module."):
-            key = key[7:]
-        # Filter out some extra keys that were present in older checkpoints
-        if "score_belief_offset_vector" in key or "score_belief_offset_bias_vector" in key or "score_belief_parity_vector" in key:
+    for old_key in state_dict["model"]:
+        key = old_key
+        
+        # Remove all possible prefixes in sequence
+        while True:
+            if key.startswith("module."):
+                key = key[len("module."):]
+            elif key.startswith("_orig_mod."):
+                key = key[len("_orig_mod."):]
+            else:
+                break
+
+        # Filter out deprecated keys (保留原有过滤逻辑)
+        if any(s in key for s in [
+            "score_belief_offset_vector",
+            "score_belief_offset_bias_vector",
+            "score_belief_parity_vector"
+        ]):
             continue
+            
         model_state_dict[key] = state_dict["model"][old_key]
+    
     return model_state_dict
 
 def load_swa_model_state_dict(state_dict):
     if "swa_model" not in state_dict:
         return None
     swa_model_state_dict = {}
-    for key in state_dict["swa_model"]:
-        # Filter out some extra keys that were present in older checkpoints
-        if "score_belief_offset_vector" in key or "score_belief_offset_bias_vector" in key or "score_belief_parity_vector" in key:
+    for old_key in state_dict["swa_model"]:
+        key = old_key
+        
+        # 移除所有 "_orig_mod." 部分，无论它在键名的哪个位置
+        #key = key.replace("_orig_mod.", "")
+        
+        # 过滤掉旧的键
+        if any(s in key for s in [
+            "score_belief_offset_vector",
+            "score_belief_offset_bias_vector",
+            "score_belief_parity_vector"
+        ]):
             continue
-        swa_model_state_dict[key] = state_dict["swa_model"][key]
+            
+        swa_model_state_dict[key] = state_dict["swa_model"][old_key]
     return swa_model_state_dict
 
 

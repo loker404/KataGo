@@ -532,7 +532,7 @@ class Metrics:
             target_weight_policy_opponent = target_global_nc[:, 28]
         else:
             # 如果没有足够的列，使用默认值
-            target_weight_policy_opponent = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+            target_weight_policy_opponent = torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
 
         target_value = target_global_nc[:, 0:3]
         target_scoremean = target_global_nc[:, 3] if target_global_nc.shape[1] > 3 else torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
@@ -559,7 +559,7 @@ class Metrics:
             # 如果没有足够的列，使用默认值
             global_weight = torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
             
-        target_weight_ownership = target_global_nc[:, 27] if target_global_nc.shape[1] > 27 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
+        target_weight_ownership = target_global_nc[:, 27] if target_global_nc.shape[1] > 27 else torch.zeros(target_global_nc.shape[0], device=target_global_nc.device)
         target_weight_lead = target_global_nc[:, 29] if target_global_nc.shape[1] > 29 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
         target_weight_futurepos = target_global_nc[:, 33] if target_global_nc.shape[1] > 33 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
         target_weight_scoring = target_global_nc[:, 34] if target_global_nc.shape[1] > 34 else torch.ones(target_global_nc.shape[0], device=target_global_nc.device)
@@ -856,9 +856,9 @@ class Metrics:
 
         loss_sum = (
             loss_policy_player * policy_opt_loss_scale
-            + loss_policy_opponent
+            + loss_policy_opponent * 0.0
             + loss_policy_player_soft * soft_policy_weight_scale
-            + loss_policy_opponent_soft * soft_policy_weight_scale
+            + loss_policy_opponent_soft * soft_policy_weight_scale * 0.0
             + loss_longoptimistic_policy * long_policy_opt_loss_scale
             + loss_shortoptimistic_policy * short_policy_opt_loss_scale
             + loss_value * value_loss_scale
@@ -866,20 +866,20 @@ class Metrics:
             + loss_td_value2 * td_value_loss_scales[1]
             + loss_td_value3 * td_value_loss_scales[2]
             + loss_td_score
-            + loss_ownership
-            + loss_scoring * 0.5
-            + loss_futurepos
-            + loss_seki * seki_loss_scale
-            + loss_scoremean
-            + loss_scorebelief_cdf
-            + loss_scorebelief_pdf
-            + loss_scorestdev
-            + loss_lead
-            + loss_variance_time * variance_time_loss_scale
-            + loss_shortterm_value_error
-            + loss_shortterm_score_error
-            + loss_qvalues_winloss
-            + loss_qvalues_score
+            + loss_ownership * 0.0
+            + loss_scoring * 0.0
+            + loss_futurepos * 0.0
+            + loss_seki * seki_loss_scale * 0.0
+            + loss_scoremean * 0.0
+            + loss_scorebelief_cdf * 0.0
+            + loss_scorebelief_pdf * 0.0
+            + loss_scorestdev * 0.0
+            + loss_lead * 0.0
+            + loss_variance_time * variance_time_loss_scale * 0.0
+            + loss_shortterm_value_error * 0.0
+            + loss_shortterm_score_error * 0.0
+            + loss_qvalues_winloss * 0.0
+            + loss_qvalues_score * 0.0
         )
 
         policy_acc1 = self.accuracy1(

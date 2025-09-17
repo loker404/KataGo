@@ -274,19 +274,19 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
         if not lr_scale_auto:
             return 1.0
 
-        if train_state["global_step_samples"] < 200_000_000:
-            return 8.00
-        if train_state["global_step_samples"] < 400_000_000:
-            return 4.00
-        if train_state["global_step_samples"] < 500_000_000:
-            return 2.00
-        if train_state["global_step_samples"] < 550_000_000:
-            return 1.00
-        if train_state["global_step_samples"] < 600_000_000:
-            return 0.50
-        if train_state["global_step_samples"] < 650_000_000:
+        if train_state["global_step_samples"] < 100_000_000:
             return 0.25
-        return 0.25
+        if train_state["global_step_samples"] < 110_000_000:
+            return 0.18
+        if train_state["global_step_samples"] < 120_000_000:
+            return 0.12
+        if train_state["global_step_samples"] < 130_000_000:
+            return 0.06
+        if train_state["global_step_samples"] < 140_000_000:
+            return 0.03
+        if train_state["global_step_samples"] < 150_000_000:
+            return 0.01
+        return 0.01
 
     def get_checkpoint_path():
         return os.path.join(traindir,"checkpoint.ckpt")
@@ -443,6 +443,8 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
             else:
                 ddp_model = raw_model
 
+            ddp_model = torch.compile(ddp_model, mode="reduce-overhead")
+
             swa_model = None
             if rank == 0 and swa_scale is not None:
                 new_factor = 1.0 / swa_scale
@@ -496,6 +498,8 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
                 ddp_model = torch.nn.parallel.DistributedDataParallel(raw_model, device_ids=[device])
             else:
                 ddp_model = raw_model
+
+            ddp_model = torch.compile(ddp_model, mode="reduce-overhead")
 
             swa_model = None
             if rank == 0 and swa_scale is not None:
@@ -617,36 +621,37 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
 
         # Warmup for initial training
         warmup_scale = 1.0
-        if model_config["norm_kind"] == "fixup" or model_config["norm_kind"] == "fixscale" or model_config["norm_kind"] == "fixscaleonenorm":
-            if train_state["global_step_samples"] < 1000000:
-                warmup_scale = 1.0 / 5.0
-            elif train_state["global_step_samples"] < 2000000:
-                warmup_scale = 1.0 / 3.0
-            elif train_state["global_step_samples"] < 4000000:
-                warmup_scale = 1.0 / 2.0
-            elif train_state["global_step_samples"] < 6000000:
-                warmup_scale = 1.0 / 1.4
-        elif model_config["norm_kind"] == "bnorm" or model_config["norm_kind"] == "brenorm" or model_config["norm_kind"] == "fixbrenorm":
-            if train_state["global_step_samples"] < 250000:
-                warmup_scale = 1.0 / 20.0
-            elif train_state["global_step_samples"] < 500000:
-                warmup_scale = 1.0 / 14.0
-            elif train_state["global_step_samples"] < 750000:
-                warmup_scale = 1.0 / 10.0
-            elif train_state["global_step_samples"] < 1000000:
-                warmup_scale = 1.0 / 7.0
-            elif train_state["global_step_samples"] < 1250000:
-                warmup_scale = 1.0 / 5.0
-            elif train_state["global_step_samples"] < 1500000:
-                warmup_scale = 1.0 / 3.0
-            elif train_state["global_step_samples"] < 1750000:
-                warmup_scale = 1.0 / 2.0
-            elif train_state["global_step_samples"] < 2000000:
-                warmup_scale = 1.0 / 1.4
+        if initial_checkpoint is None:
+            if model_config["norm_kind"] == "fixup" or model_config["norm_kind"] == "fixscale" or model_config["norm_kind"] == "fixscaleonenorm":
+                if train_state["global_step_samples"] < 1000000:
+                    warmup_scale = 1.0 / 5.0
+                elif train_state["global_step_samples"] < 2000000:
+                    warmup_scale = 1.0 / 3.0
+                elif train_state["global_step_samples"] < 4000000:
+                    warmup_scale = 1.0 / 2.0
+                elif train_state["global_step_samples"] < 6000000:
+                    warmup_scale = 1.0 / 1.4
+            elif model_config["norm_kind"] == "bnorm" or model_config["norm_kind"] == "brenorm" or model_config["norm_kind"] == "fixbrenorm":
+                if train_state["global_step_samples"] < 250000:
+                    warmup_scale = 1.0 / 20.0
+                elif train_state["global_step_samples"] < 500000:
+                    warmup_scale = 1.0 / 14.0
+                elif train_state["global_step_samples"] < 750000:
+                    warmup_scale = 1.0 / 10.0
+                elif train_state["global_step_samples"] < 1000000:
+                    warmup_scale = 1.0 / 7.0
+                elif train_state["global_step_samples"] < 1250000:
+                    warmup_scale = 1.0 / 5.0
+                elif train_state["global_step_samples"] < 1500000:
+                    warmup_scale = 1.0 / 3.0
+                elif train_state["global_step_samples"] < 1750000:
+                    warmup_scale = 1.0 / 2.0
+                elif train_state["global_step_samples"] < 2000000:
+                    warmup_scale = 1.0 / 1.4
+                else:
+                    warmup_scale = 1.0 / 1.0
             else:
-                warmup_scale = 1.0 / 1.0
-        else:
-            assert False
+                assert False
 
         normal_weight_decay = 0.0
 
@@ -744,22 +749,22 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
                     time.sleep(30)
                     continue
 
-                trainjsonpath = os.path.join(curdatadir,"train.json")
-                if not os.path.exists(trainjsonpath):
-                    if quit_if_no_data:
-                        logging.info("Shuffled data train.json file does not exist, there seems to be no data or not enough data yet, quitting: %s" % trainjsonpath)
-                        sys.exit(0)
-                    logging.info("Shuffled data train.json file does not exist, there seems to be no shuffled data yet, waiting and trying again later: %s" % trainjsonpath)
-                    time.sleep(30)
-                    continue
+                # trainjsonpath = os.path.join(curdatadir,"train.json")
+                # if not os.path.exists(trainjsonpath):
+                #     if quit_if_no_data:
+                #         logging.info("Shuffled data train.json file does not exist, there seems to be no data or not enough data yet, quitting: %s" % trainjsonpath)
+                #         sys.exit(0)
+                #     logging.info("Shuffled data train.json file does not exist, there seems to be no shuffled data yet, waiting and trying again later: %s" % trainjsonpath)
+                #     time.sleep(30)
+                #     continue
 
                 logging.info("Updated training data: " + curdatadir)
                 last_curdatadir = curdatadir
 
-                with open(trainjsonpath) as f:
-                    datainfo = json.load(f)
-                    train_state["window_start_data_row_idx"] = datainfo["range"][0]
-                    train_state["total_num_data_rows"] = datainfo["range"][1]
+                # with open(trainjsonpath) as f:
+                #     datainfo = json.load(f)
+                #     train_state["window_start_data_row_idx"] = datainfo["range"][0]
+                #     train_state["total_num_data_rows"] = datainfo["range"][1]
 
                 # Fill the buckets
                 if max_train_bucket_per_new_data is not None:
@@ -861,11 +866,18 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
         batches_to_use_so_far = 0
         found_enough = False
         for filename in trainfilegenerator:
-            jsonfilename = os.path.splitext(filename)[0] + ".json"
-            with open(jsonfilename) as f:
-                trainfileinfo = json.load(f)
+            # 直接从 .npz 文件读取样本数
+            with np.load(filename) as npz_data:
+                # 检查 binaryInputNCHW 或 globalInputNC 的样本数
+                if "binaryInputNCHW" in npz_data:
+                    num_samples_this_file = npz_data["binaryInputNCHW"].shape[0]
+                elif "globalInputNC" in npz_data:
+                    num_samples_this_file = npz_data["globalInputNC"].shape[0]
+                else:
+                    logging.warning(f"Could not determine num_samples from {filename}, skipping")
+                    continue
 
-            num_batches_this_file = trainfileinfo["num_rows"] // batch_size
+            num_batches_this_file = num_samples_this_file // batch_size
             if num_batches_this_file <= 0:
                 continue
 
@@ -902,6 +914,7 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
     if rank == 0:
         train_metrics_out = open(os.path.join(traindir,"metrics_train.json"),"a")
         val_metrics_out = open(os.path.join(traindir,"metrics_val.json"),"a")
+        swa_val_metrics_out = open(os.path.join(traindir, "metrics_swa_val.json"), "a")
     else:
         train_metrics_out = open(os.path.join(traindir,f"metrics_train_rank{rank}.json"),"a")
         val_metrics_out = open(os.path.join(traindir,f"metrics_val_rank{rank}.json"),"a")
@@ -1283,6 +1296,66 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
                     logging.info(f"Validation took {t1-t0} seconds")
                     ddp_model.train()
 
+                    # Validate SWA model
+                    if swa_model is not None:
+                        logging.info("Beginning SWA validation after epoch!")
+                        swa_model.eval()
+                        swa_val_metric_sums = defaultdict(float)
+                        swa_val_metric_weights = defaultdict(float)
+                        swa_val_samples = 0
+                        t0 = time.perf_counter()
+                        for batch in data_processing_pytorch.read_npz_training_data(
+                            val_files,
+                            batch_size,
+                            world_size=1,  # Only the main process validates
+                            rank=0,        # Only the main process validates
+                            pos_len=pos_len,
+                            device=device,
+                            randomize_symmetries=True,
+                            include_meta=raw_model.get_has_metadata_encoder(),
+                            model_config=model_config
+                        ):
+                            model_outputs = swa_model(
+                                batch["binaryInputNCHW"],
+                                batch["globalInputNC"],
+                                input_meta=(batch["metadataInputNC"] if raw_model.get_has_metadata_encoder() else None),
+                            )
+                            postprocessed = raw_model.postprocess_output(model_outputs)
+                            extra_outputs = None
+                            metrics = metrics_obj.metrics_dict_batchwise(
+                                raw_model,
+                                postprocessed,
+                                extra_outputs,
+                                batch,
+                                is_training=False,
+                                soft_policy_weight_scale=soft_policy_weight_scale,
+                                disable_optimistic_policy=disable_optimistic_policy,
+                                meta_kata_only_soft_policy=meta_kata_only_soft_policy,
+                                value_loss_scale=value_loss_scale,
+                                td_value_loss_scales=td_value_loss_scales,
+                                seki_loss_scale=seki_loss_scale,
+                                variance_time_loss_scale=variance_time_loss_scale,
+                                main_loss_scale=main_loss_scale,
+                                intermediate_loss_scale=intermediate_loss_scale,
+                            )
+                            metrics = detensorify_metrics(metrics)
+                            accumulate_metrics(swa_val_metric_sums, swa_val_metric_weights, metrics, batch_size, decay=1.0, new_weight=1.0)
+                            swa_val_samples += batch_size
+                            if max_val_samples is not None and swa_val_samples > max_val_samples:
+                                break
+
+                        # 传递 running_metrics 中的 nsamp 和 wsum 信息
+                        swa_val_metric_sums["nsamp_train"] = running_metrics["sums"]["nsamp"]
+                        swa_val_metric_weights["nsamp_train"] = running_metrics["weights"]["nsamp"]
+                        swa_val_metric_sums["wsum_train"] = running_metrics["sums"]["wsum"]
+                        swa_val_metric_weights["wsum_train"] = running_metrics["weights"]["wsum"]
+
+                        # 将 swa 模型的验证结果写入新的文件句柄
+                        log_metrics(swa_val_metric_sums, swa_val_metric_weights, metrics, swa_val_metrics_out)
+                        t1 = time.perf_counter()
+                        logging.info(f"SWA validation took {t1-t0} seconds")
+                        # swa_model.train()
+
         if rank == 0:
             logging.info("Export cycle counter = " + str(train_state["export_cycle_counter"]))
 
@@ -1333,6 +1406,7 @@ def main(rank: int, world_size: int, args, multi_gpu_device_ids, readpipes, writ
 
     train_metrics_out.close()
     val_metrics_out.close()
+    swa_val_metrics_out.close()
 
 
 if __name__ == "__main__":

@@ -60,14 +60,14 @@ else
   (
       time python3 ./shuffle.py \
            "$BASEDIR"/selfplay/ \
-           -expand-window-per-row 0.4 \
-           -taper-window-exponent 0.65 \
+           -expand-window-per-row 1.0 \
+           -taper-window-exponent 1.0 \
            -out-dir "$BASEDIR"/shuffleddata/$OUTDIRVAL \
            -out-tmp-dir "$TMPDIR"/val \
-           -approx-rows-per-out-file 70000 \
+           -approx-rows-per-out-file 100000 \
            -num-processes "$NTHREADS" \
            -batch-size "$BATCHSIZE" \
-           -only-include-md5-path-prop-lbound 0.95 \
+           -only-include-md5-path-prop-lbound 0.99 \
            -only-include-md5-path-prop-ubound 1.00 \
            -output-npz \
            "$@" \
@@ -78,15 +78,15 @@ else
   (
       time python3 ./shuffle.py \
            "$BASEDIR"/selfplay/ \
-           -expand-window-per-row 0.4 \
-           -taper-window-exponent 0.65 \
+           -expand-window-per-row 1.0 \
+           -taper-window-exponent 1.0 \
            -out-dir "$BASEDIR"/shuffleddata/$OUTDIRTRAIN \
            -out-tmp-dir "$TMPDIR"/train \
-           -approx-rows-per-out-file 70000 \
+           -approx-rows-per-out-file 100000 \
            -num-processes "$NTHREADS" \
            -batch-size "$BATCHSIZE" \
            -only-include-md5-path-prop-lbound 0.00 \
-           -only-include-md5-path-prop-ubound 0.95 \
+           -only-include-md5-path-prop-ubound 0.99 \
            -output-npz \
            "$@" \
            2>&1 | tee "$BASEDIR"/shuffleddata/$OUTDIR/outtrain.txt &
@@ -97,7 +97,7 @@ fi
 #set +x
 
 #Just in case, give a little time for nfs
-sleep 10
+sleep 1
 
 #rm if it already exists
 rm -f "$BASEDIR"/shuffleddata/current_tmp

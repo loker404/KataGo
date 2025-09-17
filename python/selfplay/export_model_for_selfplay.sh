@@ -68,16 +68,17 @@ function exportStuff() {
                         -checkpoint "$SRC"/model.ckpt \
                         -export-dir "$TMPDST" \
                         -model-name "$NAMEPREFIX""-""$NAME" \
-                        -filename-prefix model \
+                        -filename-prefix "$NAMEPREFIX""-""$NAME" \
                         -use-swa
 
-                python3 ./clean_checkpoint.py \
-                        -checkpoint "$SRC"/model.ckpt \
-                        -output "$TMPDST"/model.ckpt
+                # python3 ./clean_checkpoint.py \
+                #         -checkpoint "$SRC"/model.ckpt \
+                #         -output "$TMPDST"/model.ckpt
+                mv "$SRC"/model.ckpt "$TMPDST"/model.ckpt
                 set +x
 
                 rm -r "$SRC"
-                gzip "$TMPDST"/model.bin
+                gzip "$TMPDST"/"$NAMEPREFIX""-""$NAME".bin
 
                 #Make a bunch of the directories that selfplay will need so that there isn't a race on the selfplay
                 #machines to concurrently make it, since sometimes concurrent making of the same directory can corrupt
@@ -94,7 +95,7 @@ function exportStuff() {
                 fi
 
                 #Sleep a little to allow some tolerance on the filesystem
-                sleep 5
+                sleep 1
 
                 mv "$TMPDST" "$TARGET"
                 echo "Done exporting:" "$NAME" "to" "$TARGET"
