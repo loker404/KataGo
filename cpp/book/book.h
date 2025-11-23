@@ -155,6 +155,7 @@ class BookNode {
   friend class ConstSymBookNode;
   friend class SymBookNode;
   friend class Book;
+  friend class HtmlBookLoader;
 
 public:
   void corruptRecursiveValuesOnlyForTesting(Rand& rand);
@@ -516,6 +517,7 @@ class Book {
   friend class BookNode;
   friend class SymBookNode;
   friend class ConstSymBookNode;
+  friend class HtmlBookLoader;
 };
 
 

@@ -100,6 +100,7 @@ Search::Search(SearchParams params, NNEvaluator* nnEval, NNEvaluator* humanEval,
    nnXLen(),
    nnYLen(),
    policySize(),
+   book(NULL),  // Initialize book to NULL
    rootNode(NULL),
    nodeTable(NULL),
    mutexPool(NULL),
@@ -149,6 +150,12 @@ Search::~Search() {
   delete[] rootSafeArea;
   delete rootKoHashTable;
   delete valueWeightDistribution;
+  
+  // Delete book if it exists
+  if (book != nullptr) {
+    delete book;
+    book = nullptr;
+  }
 
   delete nodeTable;
   delete mutexPool;
@@ -294,6 +301,15 @@ void Search::setNNEval(NNEvaluator* nnEval) {
     if(humanEvaluator->getNNXLen() != nnXLen || humanEvaluator->getNNYLen() != nnYLen)
       throw StringError("Search::setNNEval - humanEval has different nnXLen or nnYLen");
   }
+}
+
+void Search::setBook(Book* newBook) {
+  // Delete the old book if it exists
+  if (book != nullptr) {
+    delete book;
+  }
+  // Set the new book
+  book = newBook;
 }
 
 void Search::clearSearch() {

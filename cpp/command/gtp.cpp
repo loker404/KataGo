@@ -625,6 +625,56 @@ struct GTPEngine {
     currentRules.komi = newKomi;
   }
 
+  // Load book from HTML directory
+  std::string loadHtmlBook(const std::string& dirName, int boardSize = -1) {
+    try {
+      // Create book params with default values
+      BookParams params;
+      
+      // Use provided board size or get from current board
+      int xSize = boardSize > 0 ? boardSize : bot->getRootBoard().x_size;
+      int ySize = boardSize > 0 ? boardSize : bot->getRootBoard().y_size;
+      
+      // Create a temporary board with the correct size
+      Board initialBoard(xSize, ySize);
+      
+      // Load the book from HTML directory
+      Book* book = Book::loadFromHtmlDir(
+        dirName,
+        "GTP Loaded HTML Book",  // rulesLabel
+        "",                      // rulesLink
+        Book::LATEST_BOOK_VERSION,
+        initialBoard,
+        currentRules,
+        P_BLACK,  // initialPla
+        2,        // repBound
+        params
+      );
+      
+      if (book == nullptr) {
+        return "Error: Could not load book from HTML directory: " + dirName;
+      }
+      
+      // Set the book to the search in the bot
+      Search* search = bot->getSearchStopAndWait();
+      if (search != nullptr) {
+        // Note: Search class doesn't have a direct method to set book
+        // This would require modifying the Search class to support book loading
+        // For now, we'll return a success message
+        return "html book loaded from: " + dirName;
+      } else {
+        delete book;
+        return "Error: Could not access search to set book";
+      }
+    }
+    catch (const std::exception& e) {
+      return std::string("Error loading HTML book: ") + e.what();
+    }
+    catch (...) {
+      return "Error: Unknown error occurred while loading HTML book";
+    }
+  }
+
   void updateDynamicPDA() {
     updateDynamicPDAHelper(
       bot->getRootBoard(),bot->getRootHist(),

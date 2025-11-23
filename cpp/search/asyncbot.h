@@ -53,6 +53,7 @@ class AsyncBot {
   void setExternalPatternBonusTable(std::unique_ptr<PatternBonusTable>&& table);
   void setCopyOfExternalPatternBonusTable(const std::unique_ptr<PatternBonusTable>& table);
   void setExternalEvalCache(std::shared_ptr<EvalCacheTable> cache);
+  void setBook(Book* book);
   void clearSearch();
   void clearEvalCache();
 

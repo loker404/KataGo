@@ -264,7 +264,7 @@ Book* HtmlBookLoader::loadFromHtmlDir(
                   
                   if (moveLoc != Board::NULL_LOC && moveLoc != Board::PASS_LOC) {
                     // Verify that the move is legal on the current board
-                    if (board.colors[moveLoc] == P_EMPTY) {
+                    if (board.colors[moveLoc] == C_EMPTY) {
                       // Extract move values
                       double policy = 0.0;
                       double winLoss = 0.0;
