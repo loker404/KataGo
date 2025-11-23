@@ -21,6 +21,7 @@
 #include "../search/searchparams.h"
 #include "../search/searchprint.h"
 #include "../search/timecontrols.h"
+#include "../book/book.h"
 
 #include "../external/nlohmann_json/json.hpp"
 

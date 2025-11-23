@@ -1,6 +1,7 @@
 #ifndef SEARCH_ASYNCBOT_H_
 #define SEARCH_ASYNCBOT_H_
 
+class Book;
 #include "../search/search.h"
 
 class AsyncBot {

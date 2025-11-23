@@ -9,6 +9,7 @@
 #include "../dataio/sgf.h"
 #include "../search/searchnode.h"
 #include "../search/asyncbot.h"
+#include "../book/book.h"
 #include "../search/patternbonustable.h"
 #include "../program/setup.h"
 #include "../program/playutils.h"
@@ -103,6 +104,10 @@ static const vector<string> knownCommands = {
   //Some debug commands
   "kata-debug-print-tc",
   "debug_moves",
+
+  //Book loading commands
+  "load-html-book",
+  "clear-book",
 
   //Stop any ongoing ponder or analyze
   "stop",
@@ -625,6 +630,9 @@ struct GTPEngine {
     currentRules.komi = newKomi;
   }
 
+  // Book ownership management
+  Book* currentBook = nullptr;
+
   // Load book from HTML directory
   std::string loadHtmlBook(const std::string& dirName, int boardSize = -1) {
     try {
@@ -636,7 +644,7 @@ struct GTPEngine {
       int ySize = boardSize > 0 ? boardSize : bot->getRootBoard().y_size;
       
       // Create a temporary board with the correct size
-      Board initialBoard(xSize, ySize);
+      Board tempBoard(xSize, ySize);
       
       // Load the book from HTML directory
       Book* book = Book::loadFromHtmlDir(
@@ -644,7 +652,7 @@ struct GTPEngine {
         "GTP Loaded HTML Book",  // rulesLabel
         "",                      // rulesLink
         Book::LATEST_BOOK_VERSION,
-        initialBoard,
+        tempBoard,
         currentRules,
         P_BLACK,  // initialPla
         2,        // repBound
@@ -655,23 +663,38 @@ struct GTPEngine {
         return "Error: Could not load book from HTML directory: " + dirName;
       }
       
-      // Set the book to the search in the bot
-      Search* search = bot->getSearchStopAndWait();
-      if (search != nullptr) {
-        // Note: Search class doesn't have a direct method to set book
-        // This would require modifying the Search class to support book loading
-        // For now, we'll return a success message
-        return "html book loaded from: " + dirName;
-      } else {
-        delete book;
-        return "Error: Could not access search to set book";
+      // Set the new book first to avoid race conditions
+      bot->setBook(book);
+      
+      // Delete the old book if it exists
+      if (currentBook != nullptr) {
+        delete currentBook;
       }
+      
+      // Store the new book
+      currentBook = book;
+      
+      return "html book loaded from: " + dirName + " (size: " + Global::intToString((int)currentBook->size()) + " nodes)";
     }
     catch (const std::exception& e) {
       return std::string("Error loading HTML book: ") + e.what();
     }
     catch (...) {
       return "Error: Unknown error occurred while loading HTML book";
+    }
+  }
+
+  // Clear the current book
+  std::string clearBook() {
+    if (currentBook != nullptr) {
+      // Set the bot's book to nullptr first
+      bot->setBook(nullptr);
+      // Then delete the current book
+      delete currentBook;
+      currentBook = nullptr;
+      return "book cleared";
+    } else {
+      return "no book to clear";
     }
   }
 
@@ -3686,6 +3709,28 @@ int MainCmds::gtp(const vector<string>& args) {
     else if(command == "stop") {
       //Stop any ongoing ponder or analysis
       engine->stopAndWait();
+    }
+
+    else if(command == "load-html-book") {
+      if(pieces.size() < 1) {
+        responseIsError = true;
+        response = "Expected directory name for load-html-book";
+      } else {
+        int boardSize = -1;
+        if(pieces.size() >= 2) {
+          if(!Global::tryStringToInt(pieces[1], boardSize)) {
+            responseIsError = true;
+            response = "Invalid board size: " + pieces[1];
+          }
+        }
+        if(!responseIsError) {
+          response = engine->loadHtmlBook(pieces[0], boardSize);
+        }
+      }
+    }
+
+    else if(command == "clear-book") {
+      response = engine->clearBook();
     }
 
     else {

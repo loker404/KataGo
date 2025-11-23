@@ -147,6 +147,10 @@ void AsyncBot::setExternalEvalCache(std::shared_ptr<EvalCacheTable> cache) {
   stopAndWait();
   search->setExternalEvalCache(cache);
 }
+void AsyncBot::setBook(Book* book) {
+  stopAndWait();
+  search->setBook(book);
+}
 void AsyncBot::clearSearch() {
   stopAndWait();
   search->clearSearch();
