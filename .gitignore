@@ -3,17 +3,36 @@
 *.o
 *.obj
 *.out
-build/
-dist/
+*.exe
+*.dll
+*.so
+*.a
+
 # Dependencies
-.venv/
 venv/
+.venv/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
 # Logs and temp files
 *.log
 *.tmp
 *.swp
+*.swo
+
 # Editors
 .vscode/
 .idea/
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Build directories
+build/
+dist/
+target/
 ```

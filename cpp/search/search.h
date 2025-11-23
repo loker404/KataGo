@@ -161,6 +161,9 @@ struct Search {
   SearchNodeTable* nodeTable;
   MutexPool* mutexPool;
   SubtreeValueBiasTable* subtreeValueBiasTable;
+  
+  // Book support
+  Book* book;
 
   //Thread pool
   int numThreadsSpawned;
@@ -234,6 +237,9 @@ struct Search {
   void setCopyOfExternalPatternBonusTable(const std::unique_ptr<PatternBonusTable>& table);
   void setExternalEvalCache(std::shared_ptr<EvalCacheTable> cache);
   void setNNEval(NNEvaluator* nnEval);
+
+  // Set book for search
+  void setBook(Book* newBook);
 
   //If the number of threads is reduced, this can free up some excess threads in the thread pool.
   //Calling this is never necessary, it may just reduce some resource use.
