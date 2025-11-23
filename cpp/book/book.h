@@ -442,6 +442,19 @@ class Book {
 
   void saveToFile(const std::string& fileName) const;
   static Book* loadFromFile(const std::string& fileName, int numThreadsForRecompute=1);
+  static Book* loadFromHtmlDir(
+    const std::string& dirName,
+    const std::string& rulesLabel,
+    const std::string& rulesLink,
+    int bookVersion,
+    const Board& initialBoard,
+    Rules initialRules,
+    Player initialPla,
+    int repBound,
+    BookParams params,
+    double htmlMinVisits = 1.0,
+    int numThreadsForRecompute = 1
+  );
 
  private:
   int64_t getIdx(BookHash hash) const;
