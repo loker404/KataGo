@@ -16,6 +16,7 @@
 #include "../tests/tests.h"
 #include "../command/commandline.h"
 #include "../main.h"
+#include "../book/book.h"
 
 using namespace std;
 
@@ -385,6 +386,10 @@ struct GTPEngine {
   //Positions during this game when genmove was called
   std::vector<Sgf::PositionSample> genmoveSamples;
 
+  // HTML opening book
+  std::unique_ptr<Book> htmlBook;
+  std::string htmlBookDir;
+
   GTPEngine(
     const string& modelFile, const string& hModelFile,
     SearchParams initialGenmoveParams, SearchParams initialAnalysisParams,
@@ -429,7 +434,9 @@ struct GTPEngine {
      genmoveTimer(),
      genmoveTimeSum(0.0),
      genmoveExpectedId(0),
-     genmoveSamples()
+     genmoveSamples(),
+     htmlBook(nullptr),
+     htmlBookDir("")
   {
   }
 
@@ -438,6 +445,7 @@ struct GTPEngine {
     delete bot;
     delete nnEval;
     delete humanEval;
+    htmlBook.reset();
   }
 
   void stopAndWait() {
@@ -1012,17 +1020,28 @@ struct GTPEngine {
     std::function<void(const string&, bool)> printGTPResponse,
     bool& maybeStartPondering
   ) {
-    bool onMoveWasCalled = false;
     Loc genmoveMoveLoc = Board::NULL_LOC;
-    auto onMove = [&genmoveMoveLoc,&onMoveWasCalled,this](Loc moveLoc, int searchId, Search* search) noexcept {
-      (void)searchId;
-      (void)search;
-      onMoveWasCalled = true;
-      genmoveMoveLoc = moveLoc;
-    };
-    launchGenMove(pla,gargs,args,onMove);
-    bot->waitForSearchToEnd();
-    testAssert(onMoveWasCalled);
+    
+    // First check if we have an HTML opening book and if the current position is in it
+    std::pair<bool, Loc> bookMoveResult = getHtmlBookMove();
+    if (bookMoveResult.first) {
+      // We found a move in the HTML opening book
+      genmoveMoveLoc = bookMoveResult.second;
+      logger.write("Using move from HTML opening book: " + Location::toString(genmoveMoveLoc, bot->getRootBoard()));
+    } else {
+      // No move found in HTML book, use engine search
+      bool onMoveWasCalled = false;
+      auto onMove = [&genmoveMoveLoc,&onMoveWasCalled,this](Loc moveLoc, int searchId, Search* search) noexcept {
+        (void)searchId;
+        (void)search;
+        onMoveWasCalled = true;
+        genmoveMoveLoc = moveLoc;
+      };
+      launchGenMove(pla,gargs,args,onMove);
+      bot->waitForSearchToEnd();
+      testAssert(onMoveWasCalled);
+    }
+    
     string response;
     bool responseIsError = false;
     Loc moveLocToPlay = Board::NULL_LOC;
@@ -1046,6 +1065,16 @@ struct GTPEngine {
     const AnalyzeArgs& args,
     std::function<void(const string&, bool)> printGTPResponse
   ) {
+    // First check if we have an HTML opening book and if the current position is in it
+    std::pair<bool, Loc> bookMoveResult = getHtmlBookMove();
+    if (bookMoveResult.first) {
+      // We found a move in the HTML opening book
+      string response = Location::toString(bookMoveResult.second, bot->getRootBoard());
+      logger.write("Using move from HTML opening book: " + response);
+      printGTPResponse(response, false);
+      return;
+    }
+    
     // Make sure to capture things by value unless they're long-lived, since the callback needs to survive past the current scope.
     auto onMove = [pla,&logger,gargs,args,printGTPResponse,this](Loc moveLoc, int searchId, Search* search) {
       string response;
@@ -1685,6 +1714,97 @@ struct GTPEngine {
       analysisParams = p;
       if(!isGenmoveParams)
         bot->setParams(analysisParams);
+    }
+  }
+
+  // Load HTML opening book
+  bool loadHtmlBook(const std::string& dirName, Logger& logger) {
+    try {
+      // Get initial board, rules, and player from current state
+      const Board& initialBoard = bot->getRootBoard();
+      Rules initialRules = bot->getRootHist().rules;
+      Player initialPla = bot->getRootPla();
+      
+      // Set up book parameters
+      BookParams params;
+      
+      // Load HTML book
+      htmlBook.reset(Book::loadFromHtmlDir(
+        dirName,
+        "html_book",  // rulesLabel
+        "",           // rulesLink
+        1,            // bookVersion
+        initialBoard,
+        initialRules,
+        initialPla,
+        3,            // repBound
+        params,
+        1.0,          // htmlMinVisits
+        1             // numThreadsForRecompute
+      ));
+      
+      if (htmlBook != nullptr) {
+        htmlBookDir = dirName;
+        logger.write("Successfully loaded HTML opening book from: " + dirName);
+        return true;
+      } else {
+        logger.write("Failed to load HTML opening book from: " + dirName);
+        return false;
+      }
+    } catch (const std::exception& e) {
+      logger.write("Error loading HTML opening book: " + string(e.what()));
+      return false;
+    }
+  }
+
+  // Try to get move from HTML opening book
+  std::pair<bool, Loc> getHtmlBookMove() {
+    if (!htmlBook) {
+      return std::make_pair(false, Board::NULL_LOC);
+    }
+
+    try {
+      // Get current board state
+      const Board& board = bot->getRootBoard();
+      const BoardHistory& hist = bot->getRootHist();
+      Player pla = bot->getRootPla();
+      
+      // Create a ConstSymBookNode for the current position
+      BookHash hash;
+      int symmetryToAlign;
+      std::vector<int> symmetries;
+      BookHash::getHashAndSymmetry(hist, 3, hash, symmetryToAlign, symmetries, 1);
+      
+      ConstSymBookNode node = ConstSymBookNode(htmlBook.get(), hash);
+      if (node.isNull()) {
+        return std::make_pair(false, Board::NULL_LOC);
+      }
+      
+      // Get all book moves
+      std::vector<BookMove> bookMoves = node.getUniqueMovesInBook();
+      if (bookMoves.empty()) {
+        return std::make_pair(false, Board::NULL_LOC);
+      }
+      
+      // Select a move based on policy (or randomly if multiple moves have similar policy)
+      Loc bestMove = Board::NULL_LOC;
+      double bestPolicy = -1.0;
+      
+      for (const BookMove& bookMove : bookMoves) {
+        if (bookMove.rawPolicy > bestPolicy) {
+          bestPolicy = bookMove.rawPolicy;
+          bestMove = bookMove.move;
+        }
+      }
+      
+      if (bestMove != Board::NULL_LOC) {
+        return std::make_pair(true, bestMove);
+      }
+      
+      return std::make_pair(false, Board::NULL_LOC);
+    } catch (const std::exception& e) {
+      // If there's an error, fall back to engine
+      return std::make_pair(false, Board::NULL_LOC);
     }
   }
 };
