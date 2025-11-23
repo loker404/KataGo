@@ -10,6 +10,7 @@
 #include "../neuralnet/nninputs.h"
 #include "../search/mutexpool.h"
 #include "../external/nlohmann_json/json.hpp"
+#include "htmlbookloader.h"
 
 //------------------------
 #include "../core/using.h"
@@ -3214,6 +3215,32 @@ Book* Book::loadFromFile(const std::string& fileName, int numThreadsForRecompute
     throw IOError("When parsing book file " + fileName + ": " + e.what() + "\nFurthest line read was:\n" + line.substr(0,10000));
   }
   return ret;
+}
+
+Book* Book::loadFromHtmlDir(
+  const std::string& dirName,
+  const std::string& rulesLabel,
+  const std::string& rulesLink,
+  int bookVersion,
+  const Board& initialBoard,
+  Rules initialRules,
+  Player initialPla,
+  int repBound,
+  BookParams params,
+  double htmlMinVisits,
+  int numThreadsForRecompute
+) {
+  // Use the HtmlBookLoader to load the book from HTML directory
+  Book* loadedBook = HtmlBookLoader::loadFromHtmlDir(
+    dirName, rulesLabel, rulesLink, bookVersion, initialBoard, initialRules, 
+    initialPla, repBound, params, htmlMinVisits
+  );
+  
+  // Recompute the book after loading from HTML
+  MutexPool mutexPool(1 << 16);
+  loadedBook->recomputeEverythingMultiThreaded(mutexPool, numThreadsForRecompute);
+  
+  return loadedBook;
 }
 
 

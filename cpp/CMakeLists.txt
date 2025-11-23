@@ -249,6 +249,7 @@ add_executable(katago
   ${NEURALNET_BACKEND_SOURCES}
   book/book.cpp
   book/bookcssjs.cpp
+  book/htmlbookloader.cpp
   search/timecontrols.cpp
   search/searchparams.cpp
   search/mutexpool.cpp
