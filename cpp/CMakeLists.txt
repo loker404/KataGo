@@ -276,6 +276,7 @@ add_executable(katago
   program/playutils.cpp
   program/playsettings.cpp
   program/play.cpp
+  program/htmlbook.cpp
   program/selfplaymanager.cpp
   ${GIT_HEADER_FILE_ALWAYS_UPDATED}
   tests/testboardarea.cpp

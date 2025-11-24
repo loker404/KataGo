@@ -8,6 +8,7 @@
 #include "../search/patternbonustable.h"
 #include "../program/setup.h"
 #include "../program/play.h"
+#include "../program/htmlbook.h"
 #include "../command/commandline.h"
 #include "../main.h"
 
@@ -40,9 +41,13 @@ int MainCmds::match(const vector<string>& args) {
 
     TCLAP::ValueArg<string> logFileArg("","log-file","Log file to output to",false,string(),"FILE");
     TCLAP::ValueArg<string> sgfOutputDirArg("","sgf-output-dir","Dir to output sgf files",false,string(),"DIR");
+    TCLAP::ValueArg<string> htmlBookDirArg("","html-book-dir","Directory of exported HTML book to follow openings",false,string(),"DIR");
+    TCLAP::ValueArg<double> htmlBookMinRelWinpctArg("","html-book-min-rel-winpct","Only allow book branches within N percentage points of best win%",false,100.0,"PCT");
 
     cmd.add(logFileArg);
     cmd.add(sgfOutputDirArg);
+    cmd.add(htmlBookDirArg);
+    cmd.add(htmlBookMinRelWinpctArg);
 
     cmd.setShortUsageArgLimit();
     cmd.addOverrideConfigArg();
@@ -51,6 +56,8 @@ int MainCmds::match(const vector<string>& args) {
 
     logFile = logFileArg.getValue();
     sgfOutputDir = sgfOutputDirArg.getValue();
+    string htmlBookDir = htmlBookDirArg.getValue();
+    double htmlBookMinRelWinpct = htmlBookMinRelWinpctArg.getValue();
 
     cmd.getConfig(cfg);
   }
@@ -253,7 +260,7 @@ int MainCmds::match(const vector<string>& args) {
 
   auto runMatchLoop = [
     &gameRunner,&matchPairer,&sgfOutputDir,&logger,&gameSeedBase,&patternBonusTables,
-    &statsMutex, &gameCount, &timeUsedByBotMap, &movesByBotMap
+    &statsMutex, &gameCount, &timeUsedByBotMap, &movesByBotMap, htmlBookDir
   ](
     uint64_t threadHash
   ) {
@@ -284,7 +291,15 @@ int MainCmds::match(const vector<string>& args) {
         };
         gameData = gameRunner->runGame(
           seed, botSpecB, botSpecW, NULL, NULL, logger,
-          shouldStopFunc, shouldPause, nullptr, afterInitialization, nullptr
+          shouldStopFunc, shouldPause, nullptr, afterInitialization,
+          // onEachMove
+          [&,bookNav](const Board& board, const BoardHistory& hist, Player pla, Loc loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*){
+            if(bookNav && bookNav->isActive()) bookNav->advance(board,hist,pla,loc);
+          },
+          // onBeforeMove
+          [&,bookNav](Search* search, const Board& board, const BoardHistory& hist, Player pla){
+            if(bookNav && bookNav->isActive()) bookNav->applyConstraints(search,board,hist,pla);
+          }
         );
       }
 
@@ -364,3 +379,6 @@ int MainCmds::match(const vector<string>& args) {
   logger.write("All cleaned up, quitting");
   return 0;
 }
+    std::unique_ptr<HtmlBookNavigator> bookNav;
+    if(htmlBookDir.size() > 0)
+      bookNav = std::unique_ptr<HtmlBookNavigator>(new HtmlBookNavigator(htmlBookDir, htmlBookMinRelWinpct));

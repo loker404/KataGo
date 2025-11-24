@@ -250,7 +250,8 @@ namespace Play {
     const PlaySettings& playSettings, const OtherGameProperties& otherGameProps,
     Rand& gameRand,
     std::function<NNEvaluator*()> checkForNewNNEval,
-    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove = nullptr,
+    std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove = nullptr
   );
 
   //In the case where checkForNewNNEval is provided, will MODIFY the provided botSpecs with any new nneval!
@@ -265,7 +266,8 @@ namespace Play {
     const PlaySettings& playSettings, const OtherGameProperties& otherGameProps,
     Rand& gameRand,
     std::function<NNEvaluator*()> checkForNewNNEval,
-    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove = nullptr,
+    std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove = nullptr
   );
 
   void maybeForkGame(
@@ -330,7 +332,8 @@ public:
     const WaitableFlag* shouldPause,
     std::function<NNEvaluator*()> checkForNewNNEval,
     std::function<void(const MatchPairer::BotSpec&, Search*)> afterInitialization,
-    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+    std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove = nullptr,
+    std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove = nullptr
   );
 
   const GameInitializer* getGameInitializer() const;

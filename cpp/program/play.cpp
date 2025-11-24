@@ -1260,7 +1260,8 @@ FinishedGameData* Play::runGame(
   const PlaySettings& playSettings, const OtherGameProperties& otherGameProps,
   Rand& gameRand,
   std::function<NNEvaluator*()> checkForNewNNEval,
-  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove,
+  std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove
 ) {
   Search* botB;
   Search* botW;
@@ -1284,7 +1285,8 @@ FinishedGameData* Play::runGame(
     playSettings, otherGameProps,
     gameRand,
     checkForNewNNEval,
-    onEachMove
+    onEachMove,
+    onBeforeMove
   );
 
   if(botW != botB)
@@ -1305,7 +1307,8 @@ FinishedGameData* Play::runGame(
   const PlaySettings& playSettings, const OtherGameProperties& otherGameProps,
   Rand& gameRand,
   std::function<NNEvaluator*()> checkForNewNNEval,
-  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove,
+  std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove
 ) {
   FinishedGameData* gameData = new FinishedGameData();
 
@@ -1514,6 +1517,8 @@ FinishedGameData* Play::runGame(
       break;
 
     Search* toMoveBot = pla == P_BLACK ? botB : botW;
+    if(onBeforeMove != nullptr)
+      onBeforeMove(toMoveBot, board, hist, pla);
     if(playSettings.dynamicSelfKomiBonusMin != 0.0 || playSettings.dynamicSelfKomiBonusMax != 0.0) {
       //This might NOT work with selfplay data recording, we'd need to check on stuff like lead and such that
       //it doesn't get fiddled with. For now, use only for match
@@ -2353,7 +2358,8 @@ FinishedGameData* GameRunner::runGame(
   const WaitableFlag* shouldPause,
   std::function<NNEvaluator*()> checkForNewNNEval,
   std::function<void(const MatchPairer::BotSpec&, Search*)> afterInitialization,
-  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove
+  std::function<void(const Board&, const BoardHistory&, Player, Loc, const std::vector<double>&, const std::vector<double>&, const std::vector<double>&, const Search*)> onEachMove,
+  std::function<void(Search*, const Board&, const BoardHistory&, Player)> onBeforeMove
 ) {
   MatchPairer::BotSpec botSpecB = bSpecB;
   MatchPairer::BotSpec botSpecW = bSpecW;
@@ -2443,7 +2449,8 @@ FinishedGameData* GameRunner::runGame(
     playSettings,otherGameProps,
     gameRand,
     checkForNewNNEval, //Note that if this triggers, botSpecB and botSpecW will get updated, for use in maybeForkGame
-    onEachMove
+    onEachMove,
+    onBeforeMove
   );
 
   if(initialPosition != NULL) {

@@ -12,6 +12,7 @@
 #include "../search/patternbonustable.h"
 #include "../program/setup.h"
 #include "../program/playutils.h"
+#include "../program/htmlbook.h"
 #include "../program/play.h"
 #include "../tests/tests.h"
 #include "../command/commandline.h"
@@ -394,7 +395,9 @@ struct GTPEngine {
     double normAvoidRepeatedPatternUtility, double hcapAvoidRepeatedPatternUtility,
     double delayScale, double delayMax,
     Player persp, int pvLen,
-    std::unique_ptr<PatternBonusTable>&& pbTable
+    std::unique_ptr<PatternBonusTable>&& pbTable,
+    const std::string& htmlBookDir,
+    double htmlBookMinRelWinPct
   )
     :nnModelFile(modelFile),
      humanModelFile(hModelFile),
@@ -431,6 +434,8 @@ struct GTPEngine {
      genmoveExpectedId(0),
      genmoveSamples()
   {
+    if(htmlBookDir.size() > 0)
+      bookNav = std::unique_ptr<HtmlBookNavigator>(new HtmlBookNavigator(htmlBookDir, htmlBookMinRelWinPct));
   }
 
   ~GTPEngine() {
@@ -581,6 +586,8 @@ struct GTPEngine {
     moveHistory = newMoveHistory;
     recentWinLossValues.clear();
     updateDynamicPDA();
+    if(bookNav)
+      bookNav->reset();
   }
 
   void clearBoard() {
@@ -593,6 +600,8 @@ struct GTPEngine {
     vector<Move> newMoveHistory;
     setPositionAndRules(pla,board,hist,board,pla,newMoveHistory);
     clearStatsForNewGame();
+    if(bookNav)
+      bookNav->reset();
   }
 
   bool setPosition(const vector<Move>& initialStones) {
@@ -639,6 +648,8 @@ struct GTPEngine {
     bool suc = bot->makeMove(loc,pla,preventEncore);
     if(suc)
       moveHistory.push_back(Move(loc,pla));
+    if(suc && bookNav && bookNav->isActive())
+      bookNav->advance(bot->getRootBoard(),bot->getRootHist(),pla,loc);
     return suc;
   }
 
@@ -1029,6 +1040,8 @@ struct GTPEngine {
     handleGenMoveResult(pla,bot->getSearchStopAndWait(),logger,gargs,args,genmoveMoveLoc,response,responseIsError,moveLocToPlay);
     printGTPResponse(response,responseIsError);
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
+      if(bookNav && bookNav->isActive())
+        bookNav->advance(bot->getRootBoard(),bot->getRootHist(),pla,moveLocToPlay);
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
       if(suc)
         moveHistory.push_back(Move(moveLocToPlay,pla));
@@ -1120,6 +1133,11 @@ struct GTPEngine {
     lastSearchFactor = searchFactor;
 
     bot->setAvoidMoveUntilByLoc(args.avoidMoveUntilByLocBlack,args.avoidMoveUntilByLocWhite);
+    if(bookNav && bookNav->isActive()) {
+      std::vector<int> bVec; std::vector<int> wVec;
+      bookNav->fillAvoidVectors(bot->getRootBoard(), bVec, wVec);
+      bot->setAvoidMoveUntilByLoc(bVec,wVec);
+    }
 
     //So that we can tell by the end of the search whether we still care for the result.
     int expectedSearchId = (genmoveExpectedId.load() + 1) & 0x3FFFFFFF;
@@ -1896,11 +1914,17 @@ int MainCmds::gtp(const vector<string>& args) {
     cmd.addOverrideConfigArg();
 
     TCLAP::ValueArg<string> overrideVersionArg("","override-version","Force KataGo to say a certain value in response to gtp version command",false,string(),"VERSION");
+    TCLAP::ValueArg<string> htmlBookDirArg("","html-book-dir","Directory of exported HTML book to follow openings",false,string(),"DIR");
+    TCLAP::ValueArg<double> htmlBookMinRelWinpctArg("","html-book-min-rel-winpct","Only allow book branches within N percentage points of best win%",false,100.0,"PCT");
     cmd.add(overrideVersionArg);
+    cmd.add(htmlBookDirArg);
+    cmd.add(htmlBookMinRelWinpctArg);
     cmd.parseArgs(args);
     nnModelFile = cmd.getModelFile();
     humanModelFile = cmd.getHumanModelFile();
     overrideVersion = overrideVersionArg.getValue();
+    string htmlBookDir = htmlBookDirArg.getValue();
+    double htmlBookMinRelWinpct = htmlBookMinRelWinpctArg.getValue();
 
     cmd.getConfig(cfg);
   }
@@ -2044,7 +2068,9 @@ int MainCmds::gtp(const vector<string>& args) {
     normalAvoidRepeatedPatternUtility, handicapAvoidRepeatedPatternUtility,
     initialDelayMoveScale,initialDelayMoveMax,
     perspective,analysisPVLen,
-    std::move(patternBonusTable)
+    std::move(patternBonusTable),
+    htmlBookDir,
+    htmlBookMinRelWinpct
   );
   engine->setOrResetBoardSize(cfg,logger,seedRand,defaultBoardXSize,defaultBoardYSize,logger.isLoggingToStderr());
 
@@ -3675,3 +3701,4 @@ int MainCmds::gtp(const vector<string>& args) {
   logger.write("All cleaned up, quitting");
   return 0;
 }
+  std::unique_ptr<HtmlBookNavigator> bookNav;
