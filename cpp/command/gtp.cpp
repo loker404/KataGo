@@ -385,6 +385,7 @@ struct GTPEngine {
 
   //Positions during this game when genmove was called
   std::vector<Sgf::PositionSample> genmoveSamples;
+  std::unique_ptr<HtmlBookNavigator> bookNav;
 
   GTPEngine(
     const string& modelFile, const string& hModelFile,
@@ -3701,4 +3702,3 @@ int MainCmds::gtp(const vector<string>& args) {
   logger.write("All cleaned up, quitting");
   return 0;
 }
-  std::unique_ptr<HtmlBookNavigator> bookNav;
