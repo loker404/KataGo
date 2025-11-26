@@ -1,7 +1,7 @@
 #include "../program/htmlbook.h"
 
 HtmlBookNavigator::HtmlBookNavigator(const std::string& d, double m)
-  :dir(d),bookJs(),bSizeX(0),bSizeY(0),active(false),currentFile(),minRelWinPct(m)
+  :dir(d),bookJs(),bSizeX(0),bSizeY(0),active(false),currentFile(),minRelWinPct(m),currentSym(0)
 {
   loadBookSizes();
   reset();
@@ -13,6 +13,7 @@ void HtmlBookNavigator::reset() {
   if(bSizeX <= 0 || bSizeY <= 0) { active = false; return; }
   std::string root = dir + "/root/root.html";
   active = loadNode(root);
+  currentSym = 0;
 }
 
 bool HtmlBookNavigator::loadBookSizes() {
@@ -60,12 +61,18 @@ void HtmlBookNavigator::advance(const Board& board, const BoardHistory& hist, Pl
   if(playedLoc == Board::PASS_LOC) { active = false; return; }
   int x = Location::getX(playedLoc, board.x_size);
   int y = Location::getY(playedLoc, board.x_size);
-  int pos = y * bSizeX + x;
-  auto it = currentNode.links.find(pos);
+  int posBoard = y * bSizeX + x;
+  int posCanon = getInvSymPos(posBoard);
+  auto it = currentNode.links.find(posCanon);
   if(it == currentNode.links.end()) { active = false; return; }
   std::string nextRel = it->second;
+  auto itsPrev = currentNode.linkSyms.find(posCanon);
+  int nextSym = currentSym;
+  if(itsPrev != currentNode.linkSyms.end())
+    nextSym = composeSym(itsPrev->second, currentSym);
   std::string nextPath = dir + "/" + nextRel;
-  if(!loadNode(nextPath)) { active = false; }
+  if(!loadNode(nextPath)) { active = false; return; }
+  currentSym = nextSym;
 }
 
 bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node) {
@@ -100,6 +107,29 @@ bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node
     std::string rel = linksBody.substr(quote1+1, quote2 - (quote1+1));
     if(key >= 0) node.links[key] = rel;
     pos = linksBody.find(':', quote2);
+  }
+  size_t symsStart = content.find("const linkSyms = {");
+  if(symsStart != std::string::npos) {
+    size_t symsEnd = content.find("};", symsStart);
+    if(symsEnd != std::string::npos) {
+      std::string symsBody = content.substr(symsStart, symsEnd - symsStart);
+      size_t p2 = symsBody.find(':');
+      while(p2 != std::string::npos) {
+        size_t keyStart = symsBody.rfind('\n', p2);
+        keyStart = keyStart == std::string::npos ? 0 : keyStart;
+        std::string left = Global::trim(symsBody.substr(keyStart, p2 - keyStart));
+        int key = -1;
+        for(int i = (int)left.size()-1; i>=0; i--) {
+          if(left[i] >= '0' && left[i] <= '9') { key = Global::stringToInt(left.substr(i - (left[i]=='-'?0:0), left.size()-i)); break; }
+        }
+        size_t valStart = symsBody.find_first_of("0123456789", p2+1);
+        if(valStart == std::string::npos) break;
+        size_t valEnd = symsBody.find_first_not_of("0123456789", valStart);
+        int val = Global::stringToInt(symsBody.substr(valStart, (valEnd==std::string::npos?symsBody.size():valEnd) - valStart));
+        if(key >= 0) node.linkSyms[key] = val;
+        p2 = symsBody.find(':', valEnd);
+      }
+    }
   }
   // detect pass and parse winpct by position
   size_t movesStart = content.find("const moves = [");
@@ -182,8 +212,9 @@ void HtmlBookNavigator::fillAvoidVectors(const Board& board, std::vector<int>& b
     bool allow = true;
     if(best > -1e50 && wp > -1e50)
       allow = (wp + 1e-9 >= best - minRelWinPct);
-    int x = pos % bSizeX;
-    int y = pos / bSizeX;
+    int symPos = getSymPos(pos);
+    int x = symPos % bSizeX;
+    int y = symPos / bSizeX;
     Loc loc = Location::getLoc(x,y,board.x_size);
     if(allow) { bVec[loc] = 0; wVec[loc] = 0; }
   }
@@ -196,4 +227,38 @@ void HtmlBookNavigator::fillAvoidVectors(const Board& board, std::vector<int>& b
       wVec[Board::PASS_LOC] = 0;
     }
   }
+}
+
+int HtmlBookNavigator::composeSym(int sym1, int sym2) const {
+  if(sym1 & 0x4)
+    sym2 = (sym2 & 0x4) | ((sym2 & 0x2) >> 1) | ((sym2 & 0x1) << 1);
+  return sym1 ^ sym2;
+}
+
+int HtmlBookNavigator::getSymPos(int pos) const {
+  int y = pos / bSizeX;
+  int x = pos % bSizeX;
+  int sym = currentSym;
+  if(sym & 1)
+    y = bSizeY-1-y;
+  if(sym & 2)
+    x = bSizeX-1-x;
+  if((sym & 4) && bSizeX == bSizeY) {
+    int tmp = x; x = y; y = tmp;
+  }
+  return x + y*bSizeX;
+}
+
+int HtmlBookNavigator::getInvSymPos(int pos) const {
+  int y = pos / bSizeX;
+  int x = pos % bSizeX;
+  int sym = currentSym;
+  if((sym & 4) && bSizeX == bSizeY) {
+    int tmp = x; x = y; y = tmp;
+  }
+  if(sym & 1)
+    y = bSizeY-1-y;
+  if(sym & 2)
+    x = bSizeX-1-x;
+  return x + y*bSizeX;
 }
