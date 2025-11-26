@@ -40,7 +40,7 @@ class HtmlBookNavigator {
 
   bool loadBookSizes();
   bool loadNode(const std::string& filePath);
-  static bool parseNode(const std::string& content, HtmlBookNode& node);
+  bool parseNode(const std::string& content, HtmlBookNode& node) const;
   int composeSym(int sym1, int sym2) const;
   int getSymPos(int pos) const;
   int getInvSymPos(int pos) const;

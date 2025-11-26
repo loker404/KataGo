@@ -48,6 +48,8 @@ bool HtmlBookNavigator::loadNode(const std::string& filePath) {
 }
 
 void HtmlBookNavigator::applyConstraints(Search* search, const Board& board, const BoardHistory& hist, Player pla) {
+  (void)hist;
+  (void)pla;
   if(!active) return;
   if(board.x_size != bSizeX || board.y_size != bSizeY) { active = false; return; }
   std::vector<int> bVec; std::vector<int> wVec;
@@ -56,6 +58,8 @@ void HtmlBookNavigator::applyConstraints(Search* search, const Board& board, con
 }
 
 void HtmlBookNavigator::advance(const Board& board, const BoardHistory& hist, Player pla, Loc playedLoc) {
+  (void)hist;
+  (void)pla;
   if(!active) return;
   if(board.x_size != bSizeX || board.y_size != bSizeY) { active = false; return; }
   if(playedLoc == Board::PASS_LOC) { active = false; return; }
@@ -75,7 +79,7 @@ void HtmlBookNavigator::advance(const Board& board, const BoardHistory& hist, Pl
   currentSym = nextSym;
 }
 
-bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node) {
+bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node) const {
   size_t np = content.find("const nextPla");
   if(np != std::string::npos) {
     size_t eq = content.find('=', np);
@@ -96,8 +100,11 @@ bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node
     std::string left = Global::trim(linksBody.substr(keyStart, pos - keyStart));
     // number may be like " 10"
     int key = -1;
-    for(int i = (int)left.size()-1; i>=0; i--) {
-      if(left[i] >= '0' && left[i] <= '9') { key = Global::stringToInt(left.substr(i - (left[i]=='-'?0:0), left.size()-i)); break; }
+    size_t numEnd = left.find_last_of("0123456789");
+    if(numEnd != std::string::npos) {
+      size_t numStart = numEnd;
+      while(numStart > 0 && (left[numStart-1] >= '0' && left[numStart-1] <= '9')) numStart--;
+      try { key = Global::stringToInt(left.substr(numStart, numEnd - numStart + 1)); } catch(...) {}
     }
     // parse value path
     size_t quote1 = linksBody.find('\'', pos);
@@ -119,8 +126,11 @@ bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node
         keyStart = keyStart == std::string::npos ? 0 : keyStart;
         std::string left = Global::trim(symsBody.substr(keyStart, p2 - keyStart));
         int key = -1;
-        for(int i = (int)left.size()-1; i>=0; i--) {
-          if(left[i] >= '0' && left[i] <= '9') { key = Global::stringToInt(left.substr(i - (left[i]=='-'?0:0), left.size()-i)); break; }
+        size_t numEnd = left.find_last_of("0123456789");
+        if(numEnd != std::string::npos) {
+          size_t numStart = numEnd;
+          while(numStart > 0 && (left[numStart-1] >= '0' && left[numStart-1] <= '9')) numStart--;
+          try { key = Global::stringToInt(left.substr(numStart, numEnd - numStart + 1)); } catch(...) {}
         }
         size_t valStart = symsBody.find_first_of("0123456789", p2+1);
         if(valStart == std::string::npos) break;
@@ -179,7 +189,7 @@ bool HtmlBookNavigator::parseNode(const std::string& content, HtmlBookNode& node
             }
           }
         }
-        if(hasWl && obj.find("\"move\"\s*:\s*\"pass\"") != std::string::npos) {
+        if(hasWl && obj.find("\"move\"") != std::string::npos && obj.find("\"pass\"") != std::string::npos) {
           double winPct = 0.0;
           if(node.nextPla == 1) winPct = 0.5 * (1.0 - wlVal);
           else winPct = 0.5 * (1.0 + wlVal);
