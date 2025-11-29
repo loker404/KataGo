@@ -1906,6 +1906,8 @@ int MainCmds::gtp(const vector<string>& args) {
   string nnModelFile;
   string humanModelFile;
   string overrideVersion;
+  string htmlBookDir;
+  double htmlBookMinRelWinpct = 100.0;
   KataGoCommandLine cmd("Run KataGo main GTP engine for playing games or casual analysis.");
   try {
     cmd.addConfigFileArg(KataGoCommandLine::defaultGtpConfigFileName(),"gtp_example.cfg");
@@ -1924,8 +1926,8 @@ int MainCmds::gtp(const vector<string>& args) {
     nnModelFile = cmd.getModelFile();
     humanModelFile = cmd.getHumanModelFile();
     overrideVersion = overrideVersionArg.getValue();
-    string htmlBookDir = htmlBookDirArg.getValue();
-    double htmlBookMinRelWinpct = htmlBookMinRelWinpctArg.getValue();
+    htmlBookDir = htmlBookDirArg.getValue();
+    htmlBookMinRelWinpct = htmlBookMinRelWinpctArg.getValue();
 
     cmd.getConfig(cfg);
   }
