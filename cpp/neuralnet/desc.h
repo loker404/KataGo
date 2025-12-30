@@ -265,6 +265,12 @@ struct ModelDesc {
   int numScoreValueChannels;
   int numOwnershipChannels;
 
+  int metaEncoderVersion;
+
+  std::map<std::string, std::string> onnxMetadata; //only non-empty when loading from ONNX
+
+  ModelPostProcessParams postProcessParams;
+
   TrunkDesc trunk;
   PolicyHeadDesc policyHead;
   ValueHeadDesc valueHead;
