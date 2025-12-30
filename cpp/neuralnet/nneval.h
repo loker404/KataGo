@@ -72,7 +72,7 @@ struct NNServerBuf {
   NNServerBuf(const NNServerBuf& other) = delete;
   NNServerBuf& operator=(const NNServerBuf& other) = delete;
 };
-
+class ONNXModelHeader;
 class NNEvaluator {
  public:
   NNEvaluator(
@@ -179,10 +179,10 @@ class NNEvaluator {
  private:
   const std::string modelName;
   const std::string modelFileName;
-  const int nnXLen;
-  const int nnYLen;
-  const bool requireExactNNLen;
-  const int policySize;
+  int nnXLen;
+  int nnYLen;
+  bool requireExactNNLen;
+  int policySize;
   const bool inputsUseNHWC;
   const enabled_t usingFP16Mode;
   const enabled_t usingNHWCMode;
@@ -231,14 +231,9 @@ class NNEvaluator {
   bool currentDoRandomize;
   int currentDefaultSymmetry;
 
-  //An array of NNResultBuf** of length numResultBufss, each NNResultBuf** is an array of NNResultBuf* of length maxNumRows.
-  //If a full resultBufs array fills up, client threads can move on to fill up more without waiting. Implemented basically
-  //as a circular buffer.
-  NNResultBuf*** m_resultBufss;
-  int m_currentResultBufsLen; //Number of rows used in in the latest (not yet full) resultBufss.
-  int m_currentResultBufsIdx; //Index of the current resultBufs being filled.
-  int m_oldestResultBufsIdx; //Index of the oldest resultBufs that still needs to be processed by a server thread
-
+  //Queued up requests
+  ThreadSafeQueue<NNResultBuf*> queryQueue;
+  friend class ONNXModelHeader;
  public:
   //Helper, for internal use only
   void serve(NNServerBuf& buf, Rand& rand, int gpuIdxForThisThread, int serverThreadIdx);

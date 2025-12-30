@@ -156,7 +156,17 @@ NNEvaluator::NNEvaluator(
     std::sort(gpuIdxs.begin(), gpuIdxs.end());
     std::unique(gpuIdxs.begin(), gpuIdxs.end());
     loadedModel = NeuralNet::loadModelFile(modelFileName,expectedSha256);
-    modelVersion = NeuralNet::getModelVersion(loadedModel);
+    const ModelDesc& desc = NeuralNet::getModelDesc(loadedModel);
+    if(desc.onnxHeader.isOnnx)
+    {
+      desc.onnxHeader.maybeChangeNNLen(*this);
+      if(nnXLen > NNPos::MAX_BOARD_LEN)
+        throw StringError("Maximum supported nnEval board size is " + Global::intToString(NNPos::MAX_BOARD_LEN));
+      if(nnYLen > NNPos::MAX_BOARD_LEN)
+        throw StringError("Maximum supported nnEval board size is " + Global::intToString(NNPos::MAX_BOARD_LEN));
+    }
+    internalModelName = desc.name;
+    modelVersion = desc.modelVersion;
     inputsVersion = NNModelVersion::getInputsVersion(modelVersion);
     computeContext = NeuralNet::createComputeContext(
       gpuIdxs,logger,nnXLen,nnYLen,
