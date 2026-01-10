@@ -59,6 +59,8 @@ SearchParams::SearchParams()
    nodeTableShardsPowerOfTwo(16),
    numVirtualLossesPerThread(3.0),
    numThreads(1),
+   backendNumThreads(1),
+   minPlayoutsPerThread(0.0),
    maxVisits(((int64_t)1) << 50),
    maxPlayouts(((int64_t)1) << 50),
    maxTime(1.0e20),
@@ -80,6 +82,153 @@ SearchParams::SearchParams()
 
 SearchParams::~SearchParams()
 {}
+
+bool SearchParams::operator==(const SearchParams& other) const {
+  return (
+    winLossUtilityFactor == other.winLossUtilityFactor &&
+    staticScoreUtilityFactor == other.staticScoreUtilityFactor &&
+    dynamicScoreUtilityFactor == other.dynamicScoreUtilityFactor &&
+    dynamicScoreCenterZeroWeight == other.dynamicScoreCenterZeroWeight &&
+    dynamicScoreCenterScale == other.dynamicScoreCenterScale &&
+    noResultUtilityForWhite == other.noResultUtilityForWhite &&
+    drawEquivalentWinsForWhite == other.drawEquivalentWinsForWhite &&
+
+    cpuctExploration == other.cpuctExploration &&
+    cpuctExplorationLog == other.cpuctExplorationLog &&
+    cpuctExplorationBase == other.cpuctExplorationBase &&
+
+    cpuctUtilityStdevPrior == other.cpuctUtilityStdevPrior &&
+    cpuctUtilityStdevPriorWeight == other.cpuctUtilityStdevPriorWeight &&
+    cpuctUtilityStdevScale == other.cpuctUtilityStdevScale &&
+
+    fpuReductionMax == other.fpuReductionMax &&
+    fpuLossProp == other.fpuLossProp &&
+
+    fpuParentWeightByVisitedPolicy == other.fpuParentWeightByVisitedPolicy &&
+    fpuParentWeightByVisitedPolicyPow == other.fpuParentWeightByVisitedPolicyPow &&
+    fpuParentWeight == other.fpuParentWeight &&
+
+    policyOptimism == other.policyOptimism &&
+
+    valueWeightExponent == other.valueWeightExponent &&
+    useNoisePruning == other.useNoisePruning &&
+    noisePruneUtilityScale == other.noisePruneUtilityScale &&
+    noisePruningCap == other.noisePruningCap &&
+
+    useUncertainty == other.useUncertainty &&
+    uncertaintyCoeff == other.uncertaintyCoeff &&
+    uncertaintyExponent == other.uncertaintyExponent &&
+    uncertaintyMaxWeight == other.uncertaintyMaxWeight &&
+
+    useGraphSearch == other.useGraphSearch &&
+    graphSearchRepBound == other.graphSearchRepBound &&
+    graphSearchCatchUpLeakProb == other.graphSearchCatchUpLeakProb &&
+
+    rootNoiseEnabled == other.rootNoiseEnabled &&
+    rootDirichletNoiseTotalConcentration == other.rootDirichletNoiseTotalConcentration &&
+    rootDirichletNoiseWeight == other.rootDirichletNoiseWeight &&
+
+    rootPolicyTemperature == other.rootPolicyTemperature &&
+    rootPolicyTemperatureEarly == other.rootPolicyTemperatureEarly &&
+    rootFpuReductionMax == other.rootFpuReductionMax &&
+    rootFpuLossProp == other.rootFpuLossProp &&
+    rootNumSymmetriesToSample == other.rootNumSymmetriesToSample &&
+    rootSymmetryPruning == other.rootSymmetryPruning &&
+    rootDesiredPerChildVisitsCoeff == other.rootDesiredPerChildVisitsCoeff &&
+
+    rootPolicyOptimism == other.rootPolicyOptimism &&
+
+    chosenMoveTemperature == other.chosenMoveTemperature &&
+    chosenMoveTemperatureEarly == other.chosenMoveTemperatureEarly &&
+    chosenMoveTemperatureHalflife == other.chosenMoveTemperatureHalflife &&
+
+    chosenMoveTemperatureOnlyBelowProb == other.chosenMoveTemperatureOnlyBelowProb &&
+    chosenMoveSubtract == other.chosenMoveSubtract &&
+    chosenMovePrune == other.chosenMovePrune &&
+
+    useLcbForSelection == other.useLcbForSelection &&
+    lcbStdevs == other.lcbStdevs &&
+    minVisitPropForLCB == other.minVisitPropForLCB &&
+    useNonBuggyLcb == other.useNonBuggyLcb &&
+
+    rootEndingBonusPoints == other.rootEndingBonusPoints &&
+    rootPruneUselessMoves == other.rootPruneUselessMoves &&
+    conservativePass == other.conservativePass &&
+    fillDameBeforePass == other.fillDameBeforePass &&
+    avoidMYTDaggerHackPla == other.avoidMYTDaggerHackPla &&
+    wideRootNoise == other.wideRootNoise &&
+    enablePassingHacks == other.enablePassingHacks &&
+    enableMorePassingHacks == other.enableMorePassingHacks &&
+
+    playoutDoublingAdvantage == other.playoutDoublingAdvantage &&
+    playoutDoublingAdvantagePla == other.playoutDoublingAdvantagePla &&
+
+    avoidRepeatedPatternUtility == other.avoidRepeatedPatternUtility &&
+
+    nnPolicyTemperature == other.nnPolicyTemperature &&
+    antiMirror == other.antiMirror &&
+
+    ignorePreRootHistory == other.ignorePreRootHistory &&
+    ignoreAllHistory == other.ignoreAllHistory &&
+
+    subtreeValueBiasFactor == other.subtreeValueBiasFactor &&
+    subtreeValueBiasTableNumShards == other.subtreeValueBiasTableNumShards &&
+    subtreeValueBiasFreeProp == other.subtreeValueBiasFreeProp &&
+    subtreeValueBiasWeightExponent == other.subtreeValueBiasWeightExponent &&
+
+    useEvalCache == other.useEvalCache &&
+    evalCacheMinVisits == other.evalCacheMinVisits &&
+
+    nodeTableShardsPowerOfTwo == other.nodeTableShardsPowerOfTwo &&
+    numVirtualLossesPerThread == other.numVirtualLossesPerThread &&
+
+    numThreads == other.numThreads &&
+    backendNumThreads == other.backendNumThreads &&
+    minPlayoutsPerThread == other.minPlayoutsPerThread &&
+    maxVisits == other.maxVisits &&
+    maxPlayouts == other.maxPlayouts &&
+    maxTime == other.maxTime &&
+
+    maxVisitsPondering == other.maxVisitsPondering &&
+    maxPlayoutsPondering == other.maxPlayoutsPondering &&
+    maxTimePondering == other.maxTimePondering &&
+
+    lagBuffer == other.lagBuffer &&
+
+    searchFactorAfterOnePass == other.searchFactorAfterOnePass &&
+    searchFactorAfterTwoPass == other.searchFactorAfterTwoPass &&
+
+    treeReuseCarryOverTimeFactor == other.treeReuseCarryOverTimeFactor &&
+    overallocateTimeFactor == other.overallocateTimeFactor &&
+    midgameTimeFactor == other.midgameTimeFactor &&
+    midgameTurnPeakTime == other.midgameTurnPeakTime &&
+    endgameTurnTimeDecay == other.endgameTurnTimeDecay &&
+    obviousMovesTimeFactor == other.obviousMovesTimeFactor &&
+    obviousMovesPolicyEntropyTolerance == other.obviousMovesPolicyEntropyTolerance &&
+    obviousMovesPolicySurpriseTolerance == other.obviousMovesPolicySurpriseTolerance &&
+
+    futileVisitsThreshold == other.futileVisitsThreshold &&
+
+    humanSLProfile == other.humanSLProfile &&
+    humanSLCpuctExploration == other.humanSLCpuctExploration &&
+    humanSLCpuctPermanent == other.humanSLCpuctPermanent &&
+    humanSLRootExploreProbWeightless == other.humanSLRootExploreProbWeightless &&
+    humanSLRootExploreProbWeightful == other.humanSLRootExploreProbWeightful &&
+    humanSLPlaExploreProbWeightless == other.humanSLPlaExploreProbWeightless &&
+    humanSLPlaExploreProbWeightful == other.humanSLPlaExploreProbWeightful &&
+    humanSLOppExploreProbWeightless == other.humanSLOppExploreProbWeightless &&
+    humanSLOppExploreProbWeightful == other.humanSLOppExploreProbWeightful &&
+
+    humanSLChosenMoveProp == other.humanSLChosenMoveProp &&
+    humanSLChosenMoveIgnorePass == other.humanSLChosenMoveIgnorePass &&
+    humanSLChosenMovePiklLambda == other.humanSLChosenMovePiklLambda
+  );
+}
+
+bool SearchParams::operator!=(const SearchParams& other) const {
+  return !(*this == other);
+}
+
 
 SearchParams SearchParams::forTestsV1() {
   SearchParams params;
@@ -131,6 +280,152 @@ void SearchParams::failIfParamsDifferOnUnchangeableParameter(const SearchParams&
   }
 }
 
+json SearchParams::changeableParametersToJson() const {
+  json ret;
+  ret["winLossUtilityFactor"] = winLossUtilityFactor;
+  ret["staticScoreUtilityFactor"] = staticScoreUtilityFactor;
+  ret["dynamicScoreUtilityFactor"] = dynamicScoreUtilityFactor;
+  ret["dynamicScoreCenterZeroWeight"] = dynamicScoreCenterZeroWeight;
+  ret["dynamicScoreCenterScale"] = dynamicScoreCenterScale;
+  ret["noResultUtilityForWhite"] = noResultUtilityForWhite;
+  ret["drawEquivalentWinsForWhite"] = drawEquivalentWinsForWhite;
+
+  ret["cpuctExploration"] = cpuctExploration;
+  ret["cpuctExplorationLog"] = cpuctExplorationLog;
+  ret["cpuctExplorationBase"] = cpuctExplorationBase;
+
+  ret["cpuctUtilityStdevPrior"] = cpuctUtilityStdevPrior;
+  ret["cpuctUtilityStdevPriorWeight"] = cpuctUtilityStdevPriorWeight;
+  ret["cpuctUtilityStdevScale"] = cpuctUtilityStdevScale;
+
+  ret["fpuReductionMax"] = fpuReductionMax;
+  ret["fpuLossProp"] = fpuLossProp;
+
+  ret["fpuParentWeightByVisitedPolicy"] = fpuParentWeightByVisitedPolicy;
+  ret["fpuParentWeightByVisitedPolicyPow"] = fpuParentWeightByVisitedPolicyPow;
+  ret["fpuParentWeight"] = fpuParentWeight;
+
+  ret["policyOptimism"] = policyOptimism;
+
+  ret["valueWeightExponent"] = valueWeightExponent;
+  ret["useNoisePruning"] = useNoisePruning;
+  ret["noisePruneUtilityScale"] = noisePruneUtilityScale;
+  ret["noisePruningCap"] = noisePruningCap;
+
+  ret["useUncertainty"] = useUncertainty;
+  ret["uncertaintyCoeff"] = uncertaintyCoeff;
+  ret["uncertaintyExponent"] = uncertaintyExponent;
+  ret["uncertaintyMaxWeight"] = uncertaintyMaxWeight;
+
+  ret["useGraphSearch"] = useGraphSearch;
+  ret["graphSearchRepBound"] = graphSearchRepBound;
+  ret["graphSearchCatchUpLeakProb"] = graphSearchCatchUpLeakProb;
+
+  ret["rootNoiseEnabled"] = rootNoiseEnabled;
+  ret["rootDirichletNoiseTotalConcentration"] = rootDirichletNoiseTotalConcentration;
+  ret["rootDirichletNoiseWeight"] = rootDirichletNoiseWeight;
+
+  ret["rootPolicyTemperature"] = rootPolicyTemperature;
+  ret["rootPolicyTemperatureEarly"] = rootPolicyTemperatureEarly;
+  ret["rootFpuReductionMax"] = rootFpuReductionMax;
+  ret["rootFpuLossProp"] = rootFpuLossProp;
+  ret["rootNumSymmetriesToSample"] = rootNumSymmetriesToSample;
+  ret["rootSymmetryPruning"] = rootSymmetryPruning;
+  ret["rootDesiredPerChildVisitsCoeff"] = rootDesiredPerChildVisitsCoeff;
+
+  ret["rootPolicyOptimism"] = rootPolicyOptimism;
+
+  ret["chosenMoveTemperature"] = chosenMoveTemperature;
+  ret["chosenMoveTemperatureEarly"] = chosenMoveTemperatureEarly;
+  ret["chosenMoveTemperatureHalflife"] = chosenMoveTemperatureHalflife;
+  ret["chosenMoveTemperatureOnlyBelowProb"] = chosenMoveTemperatureOnlyBelowProb;
+
+  ret["chosenMoveSubtract"] = chosenMoveSubtract;
+  ret["chosenMovePrune"] = chosenMovePrune;
+  ret["useLcbForSelection"] = useLcbForSelection;
+
+  ret["lcbStdevs"] = lcbStdevs;
+  ret["minVisitPropForLCB"] = minVisitPropForLCB;
+  ret["useNonBuggyLcb"] = useNonBuggyLcb;
+  ret["rootEndingBonusPoints"] = rootEndingBonusPoints;
+
+  ret["rootPruneUselessMoves"] = rootPruneUselessMoves;
+  ret["conservativePass"] = conservativePass;
+  ret["fillDameBeforePass"] = fillDameBeforePass;
+  // Unused
+  // ret["avoidMYTDaggerHackPla"] = PlayerIO::playerToStringShort(avoidMYTDaggerHackPla);
+  ret["wideRootNoise"] = wideRootNoise;
+  ret["enablePassingHacks"] = enablePassingHacks;
+  ret["enableMorePassingHacks"] = enableMorePassingHacks;
+
+  // Special handling in GTP
+  ret["playoutDoublingAdvantage"] = playoutDoublingAdvantage;
+  ret["playoutDoublingAdvantagePla"] = PlayerIO::playerToStringShort(playoutDoublingAdvantagePla);
+
+  // Special handling in GTP
+  // ret["avoidRepeatedPatternUtility"] = avoidRepeatedPatternUtility;
+
+  ret["nnPolicyTemperature"] = nnPolicyTemperature;
+  // Special handling in GTP
+  // ret["antiMirror"] = antiMirror;
+
+  ret["ignorePreRootHistory"] = ignorePreRootHistory;
+  ret["ignoreAllHistory"] = ignoreAllHistory;
+
+  ret["subtreeValueBiasFactor"] = subtreeValueBiasFactor;
+  ret["subtreeValueBiasTableNumShards"] = subtreeValueBiasTableNumShards;
+  ret["subtreeValueBiasFreeProp"] = subtreeValueBiasFreeProp;
+  ret["subtreeValueBiasWeightExponent"] = subtreeValueBiasWeightExponent;
+
+  // ret["useEvalCache"] = useEvalCache;
+  // ret["evalCacheMinVisits"] = evalCacheMinVisits;
+
+  // ret["nodeTableShardsPowerOfTwo"] = nodeTableShardsPowerOfTwo;
+  ret["numVirtualLossesPerThread"] = numVirtualLossesPerThread;
+
+  ret["numSearchThreads"] = numThreads; // NOTE: different name since that's how setup.cpp loads it
+  ret["backendNumThreads"] = backendNumThreads; // NOTE: different name since that's how setup.cpp loads it
+  ret["minPlayoutsPerThread"] = minPlayoutsPerThread;
+  ret["maxVisits"] = maxVisits;
+  ret["maxPlayouts"] = maxPlayouts;
+  ret["maxTime"] = maxTime;
+
+  ret["maxVisitsPondering"] = maxVisitsPondering;
+  ret["maxPlayoutsPondering"] = maxPlayoutsPondering;
+  ret["maxTimePondering"] = maxTimePondering;
+
+  ret["lagBuffer"] = lagBuffer;
+
+  ret["searchFactorAfterOnePass"] = searchFactorAfterOnePass;
+  ret["searchFactorAfterTwoPass"] = searchFactorAfterTwoPass;
+
+  ret["treeReuseCarryOverTimeFactor"] = treeReuseCarryOverTimeFactor;
+  ret["overallocateTimeFactor"] = overallocateTimeFactor;
+  ret["midgameTimeFactor"] = midgameTimeFactor;
+  ret["midgameTurnPeakTime"] = midgameTurnPeakTime;
+  ret["endgameTurnTimeDecay"] = endgameTurnTimeDecay;
+  ret["obviousMovesTimeFactor"] = obviousMovesTimeFactor;
+  ret["obviousMovesPolicyEntropyTolerance"] = obviousMovesPolicyEntropyTolerance;
+  ret["obviousMovesPolicySurpriseTolerance"] = obviousMovesPolicySurpriseTolerance;
+
+  ret["futileVisitsThreshold"] = futileVisitsThreshold;
+
+  ret["humanSLCpuctExploration"] = humanSLCpuctExploration;
+  ret["humanSLCpuctPermanent"] = humanSLCpuctPermanent;
+
+  ret["humanSLRootExploreProbWeightless"] = humanSLRootExploreProbWeightless;
+  ret["humanSLRootExploreProbWeightful"] = humanSLRootExploreProbWeightful;
+  ret["humanSLPlaExploreProbWeightless"] = humanSLPlaExploreProbWeightless;
+  ret["humanSLPlaExploreProbWeightful"] = humanSLPlaExploreProbWeightful;
+  ret["humanSLOppExploreProbWeightless"] = humanSLOppExploreProbWeightless;
+  ret["humanSLOppExploreProbWeightful"] = humanSLOppExploreProbWeightful;
+
+  ret["humanSLChosenMoveProp"] = humanSLChosenMoveProp;
+  ret["humanSLChosenMoveIgnorePass"] = humanSLChosenMoveIgnorePass;
+  ret["humanSLChosenMovePiklLambda"] = humanSLChosenMovePiklLambda;
+
+  return ret;
+}
 
 #define PRINTPARAM(PARAMNAME) out << #PARAMNAME << ": " << PARAMNAME << std::endl;
 void SearchParams::printParams(std::ostream& out) {
@@ -213,6 +508,8 @@ void SearchParams::printParams(std::ostream& out) {
 
 
   PRINTPARAM(numThreads);
+  PRINTPARAM(backendNumThreads);
+  PRINTPARAM(minPlayoutsPerThread);
   PRINTPARAM(maxVisits);
   PRINTPARAM(maxPlayouts);
   PRINTPARAM(maxTime);

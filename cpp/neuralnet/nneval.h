@@ -98,7 +98,8 @@ class NNEvaluator {
     const std::vector<int>& gpuIdxByServerThread,
     const std::string& randSeed,
     bool doRandomize,
-    int defaultSymmetry
+    int defaultSymmetry,
+    int backendNumThreads 
   );
   ~NNEvaluator();
 
@@ -187,6 +188,7 @@ class NNEvaluator {
   const enabled_t usingFP16Mode;
   const enabled_t usingNHWCMode;
   int numThreads;
+  int backendNumThreads;
   std::vector<int> gpuIdxByServerThread;
   const std::string randSeed;
   const bool debugSkipNeuralNet;
