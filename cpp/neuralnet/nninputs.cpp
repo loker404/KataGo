@@ -348,6 +348,7 @@ NNOutput::NNOutput(const NNOutput& other) {
     noisedPolicyProbs = NULL;
 
   std::copy(other.policyProbs, other.policyProbs+NNPos::MAX_NN_POLICY_SIZE, policyProbs);
+  std::copy(other.opponentPolicyProbs, other.opponentPolicyProbs+NNPos::MAX_NN_POLICY_SIZE, opponentPolicyProbs);
   policyOptimismUsed = other.policyOptimismUsed;
 }
 
@@ -443,6 +444,28 @@ NNOutput::NNOutput(const vector<shared_ptr<NNOutput>>& others) {
         policyProbs[pos] /= floatLen;
     }
   }
+  // Average opponentPolicyProbs
+  {
+    bool mismatch = false;
+    std::fill(opponentPolicyProbs, opponentPolicyProbs + NNPos::MAX_NN_POLICY_SIZE, 0.0f);
+    for(int i = 0; i<len; i++) {
+      const NNOutput& other = *(others[i]);
+      for(int pos = 0; pos<NNPos::MAX_NN_POLICY_SIZE; pos++) {
+        if(i > 0 && (opponentPolicyProbs[pos] < 0) != (other.opponentPolicyProbs[pos] < 0))
+          mismatch = true;
+        opponentPolicyProbs[pos] += other.opponentPolicyProbs[pos];
+      }
+    }
+    //In case of mismatch, just take the first one
+    if(mismatch) {
+      const NNOutput& other = *(others[0]);
+      std::copy(other.opponentPolicyProbs, other.opponentPolicyProbs + NNPos::MAX_NN_POLICY_SIZE, opponentPolicyProbs);
+    }
+    else {
+      for(int pos = 0; pos<NNPos::MAX_NN_POLICY_SIZE; pos++)
+        opponentPolicyProbs[pos] /= floatLen;
+    }
+  }
   {
     bool allOptimismsMatch = true;
     for(int i = 1; i<len; i++) {
@@ -497,6 +520,7 @@ NNOutput& NNOutput::operator=(const NNOutput& other) {
     noisedPolicyProbs = NULL;
 
   std::copy(other.policyProbs, other.policyProbs+NNPos::MAX_NN_POLICY_SIZE, policyProbs);
+  std::copy(other.opponentPolicyProbs, other.opponentPolicyProbs+NNPos::MAX_NN_POLICY_SIZE, opponentPolicyProbs);
   policyOptimismUsed = other.policyOptimismUsed;
 
   return *this;
