@@ -1511,7 +1511,7 @@ FinishedGameData* Play::runGame(
     // Mark game mode as adversarial
     gameData->mode = FinishedGameData::MODE_ADVERSARIAL;
     // Randomly choose attacker between black and white
-    gameData->attackerPlayer = gameRand.randBool() ? P_BLACK : P_WHITE;
+    gameData->attackerPlayer = gameRand.nextBool(0.5) ? P_BLACK : P_WHITE;
   }
 
   //Main play loop
