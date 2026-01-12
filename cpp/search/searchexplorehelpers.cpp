@@ -342,7 +342,17 @@ void Search::selectBestChildToDescend(
   int64_t totalChildEdgeVisits = 0;
   const NNOutput* nnOutput = node.getNNOutput();
   assert(nnOutput != NULL);
-  const float* policyProbs = nnOutput->getPolicyProbsMaybeNoised();
+
+  // For adversarial training, choose which policy to use
+  const float* policyProbs;
+  if(searchParams.useOpponentPolicy) {
+    // Use opponent policy (p1loss) for adversarial training
+    policyProbs = nnOutput->getOpponentPolicyProbs();
+  } else {
+    // Use current player's policy (p0loss)
+    policyProbs = nnOutput->getPolicyProbsMaybeNoised();
+  }
+
   for(int i = 0; i<childrenCapacity; i++) {
     const SearchChildPointer& childPointer = children[i];
     const SearchNode* child = childPointer.getIfAllocated();
@@ -403,7 +413,16 @@ void Search::selectBestChildToDescend(
       nnOutput = humanOutput;
       policyProbMassVisited = 0.0;
       assert(nnOutput != NULL);
-      policyProbs = nnOutput->getPolicyProbsMaybeNoised();
+
+      // For adversarial training, choose which policy to use
+      if(searchParams.useOpponentPolicy) {
+        // Use opponent policy (p1loss) for adversarial training
+        policyProbs = nnOutput->getOpponentPolicyProbs();
+      } else {
+        // Use current player's policy (p0loss)
+        policyProbs = nnOutput->getPolicyProbsMaybeNoised();
+      }
+
       for(int i = 0; i<childrenCapacity; i++) {
         const SearchChildPointer& childPointer = children[i];
         const SearchNode* child = childPointer.getIfAllocated();

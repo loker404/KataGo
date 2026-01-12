@@ -132,6 +132,8 @@ struct NNOutput {
   //Indexed by pos rather than loc
   //Values in here will be set to negative for illegal moves, including superko
   float policyProbs[NNPos::MAX_NN_POLICY_SIZE];
+  //Opponent policy probabilities (p1loss) for adversarial training
+  float opponentPolicyProbs[NNPos::MAX_NN_POLICY_SIZE];
   //The optimism value used for this neural net evaluation.
   float policyOptimismUsed;
 
@@ -155,6 +157,7 @@ struct NNOutput {
 
   inline float* getPolicyProbsMaybeNoised() { return noisedPolicyProbs != NULL ? noisedPolicyProbs : policyProbs; }
   inline const float* getPolicyProbsMaybeNoised() const { return noisedPolicyProbs != NULL ? noisedPolicyProbs : policyProbs; }
+  inline const float* getOpponentPolicyProbs() const { return opponentPolicyProbs; }
   void debugPrint(std::ostream& out, const Board& board);
   inline int getPos(Loc loc, const Board& board) const { return NNPos::locToPos(loc, board.x_size, nnXLen, nnYLen ); }
 };

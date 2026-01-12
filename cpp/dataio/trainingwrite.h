@@ -84,6 +84,7 @@ struct FinishedGameData {
   //Metadata about how the game was initialized
   int numExtraBlack;
   int mode;
+  Player attackerPlayer; //For adversarial training: which player is the attacker
   int beganInEncorePhase;
   int usedInitialPosition;
   //This differs from numExtraBlack in that numExtraBlack counts number of extra black stones
@@ -118,7 +119,7 @@ struct FinishedGameData {
   int bMoveCount;
   int wMoveCount;
 
-  static constexpr int NUM_MODES = 8;
+  static constexpr int NUM_MODES = 9;
   static constexpr int MODE_NORMAL = 0;
   static constexpr int MODE_CLEANUP_TRAINING = 1;
   static constexpr int MODE_FORK = 2;
@@ -127,6 +128,7 @@ struct FinishedGameData {
   static constexpr int MODE_HINTPOS = 5;
   static constexpr int MODE_HINTFORK = 6;
   static constexpr int MODE_ASYM = 7;
+  static constexpr int MODE_ADVERSARIAL = 8;
 
   FinishedGameData();
   ~FinishedGameData();

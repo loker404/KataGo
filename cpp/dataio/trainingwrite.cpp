@@ -1130,12 +1130,33 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
   //Write main game rows
   int startTurnIdx = (int)data.startHist.moveHistory.size();
   for(int turnAfterStart = 0; turnAfterStart<numMoves; turnAfterStart++) {
-    double targetWeight = data.targetWeightByTurn[turnAfterStart];
     int turnIdx = turnAfterStart + startTurnIdx;
+
+    // For adversarial training: train p0loss with attacker data, p1loss with victim data
+    bool isAttackerTurn = false;
+    if(data.mode == FinishedGameData::MODE_ADVERSARIAL) {
+      isAttackerTurn = (nextPlayer == data.attackerPlayer);
+    }
+
+    double targetWeight = data.targetWeightByTurn[turnAfterStart];
 
     int64_t unreducedNumVisits = data.policyTargetsByTurn[turnAfterStart].unreducedNumVisits;
     const vector<PolicyTargetMove>* policyTarget0 = data.policyTargetsByTurn[turnAfterStart].policyTargets;
     const vector<PolicyTargetMove>* policyTarget1 = (turnAfterStart + 1 < numMoves) ? data.policyTargetsByTurn[turnAfterStart+1].policyTargets : NULL;
+
+    // For adversarial training: swap policy targets based on role
+    // Attacker: p0loss = current move, p1loss = opponent move
+    // Victim: p0loss = opponent move (don't train), p1loss = current move
+    const vector<PolicyTargetMove>* effectivePolicyTarget0 = policyTarget0;
+    const vector<PolicyTargetMove>* effectivePolicyTarget1 = policyTarget1;
+    if(data.mode == FinishedGameData::MODE_ADVERSARIAL) {
+      if(!isAttackerTurn) {
+        // Victim turn: don't train p0loss, train p1loss with their own move
+        effectivePolicyTarget0 = NULL;  // Don't train p0loss for victim
+        effectivePolicyTarget1 = policyTarget0;  // Train p1loss with victim's move
+      }
+    }
+
     bool isSidePosition = false;
     float valueTargetWeight = 1.0f;
     float tdValueTargetWeight = 1.0f;
@@ -1159,8 +1180,8 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
             turnIdx,
             (float)data.trainingWeight,
             unreducedNumVisits,
-            policyTarget0,
-            policyTarget1,
+            effectivePolicyTarget0,
+            effectivePolicyTarget1,
             data.policySurpriseByTurn[turnAfterStart],
             data.policyEntropyByTurn[turnAfterStart],
             data.searchEntropyByTurn[turnAfterStart],

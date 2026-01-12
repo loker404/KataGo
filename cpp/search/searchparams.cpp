@@ -75,6 +75,7 @@ SearchParams::SearchParams()
    avoidRepeatedPatternUtility(0.0),
    nnPolicyTemperature(1.0f),
    antiMirror(false),
+   useOpponentPolicy(false),
    ignorePreRootHistory(false),
    ignoreAllHistory(false),
    subtreeValueBiasFactor(0.0),

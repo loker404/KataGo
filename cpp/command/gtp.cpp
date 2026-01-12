@@ -1117,6 +1117,11 @@ struct GTPEngine {
     if(paramsToUse != bot->getParams())
       bot->setParams(paramsToUse);
 
+    // Adversarial training: use opponent policy (p1loss)
+    paramsToUse.useOpponentPolicy = true;
+
+    if(paramsToUse != bot->getParams())
+      bot->setParams(paramsToUse);
 
     //Play faster when winning
     double searchFactor = PlayUtils::getSearchFactor(gargs.searchFactorWhenWinningThreshold,gargs.searchFactorWhenWinning,paramsToUse,recentWinLossValues,pla);

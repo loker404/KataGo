@@ -773,26 +773,32 @@ float MetalProcess::policyOptimismCalc(const double policyOptimism, const float 
 }
 
 void MetalProcess::processOptimism(
-  InputBuffers* inputBuffers,
-  NNOutput* currentOutput,
-  const double policyOptimism,
-  size_t row) {
+    InputBuffers* inputBuffers,
+    NNOutput* currentOutput,
+    const double policyOptimism,
+    size_t row) {
   auto& buffers = *inputBuffers;
   const auto singlePolicyResultElts = buffers.singlePolicyResultElts;
   float* targetBuffer = &buffers.policyProbsBuffer[row * singlePolicyResultElts];
+  float* opponentPolicyProbs = currentOutput->opponentPolicyProbs;
   float* policyOutputBuf = &buffers.policyResults[row * singlePolicyResultElts * buffers.policyResultChannels];
 
+  // For adversarial training with v12-v15 models (2 channels):
+  // Channel 0: policy
+  // Channel 1: opponent policy (p1loss)
+  // No optimism mixing
   for(auto i = 0; i < singlePolicyResultElts; ++i) {
     const float p = policyOutputBuf[i];
-    const float pOpt = policyOutputBuf[i + singlePolicyResultElts];
-    targetBuffer[i] = MetalProcess::policyOptimismCalc(policyOptimism, p, pOpt);
+    const float pOpponent = policyOutputBuf[i + singlePolicyResultElts];
+    targetBuffer[i] = p;  // No optimism for adversarial training
+    opponentPolicyProbs[i] = pOpponent;
   }
 
   const auto p = buffers.policyPassResults[row * buffers.policyResultChannels];
-  const auto pOpt = buffers.policyPassResults[row * buffers.policyResultChannels + 1];
-  currentOutput->policyProbs[buffers.singlePolicyProbsElts - 1] = MetalProcess::policyOptimismCalc(policyOptimism, p, pOpt);
+  const auto pOpponent = buffers.policyPassResults[row * buffers.policyResultChannels + 1];
+  currentOutput->policyProbs[buffers.singlePolicyProbsElts - 1] = p;  // No optimism
+  currentOutput->opponentPolicyProbs[buffers.singlePolicyProbsElts - 1] = pOpponent;
 }
-
 void MetalProcess::processPolicy(
   InputBuffers* inputBuffers,
   NNOutput* currentOutput,

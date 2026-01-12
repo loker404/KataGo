@@ -2722,6 +2722,7 @@ void NeuralNet::getOutput(
     const float* policyPassSrcBuf = inputBuffers->policyPassResults + row * numPolicyChannels;
     const float* policySrcBuf = inputBuffers->policyResults + row * numPolicyChannels * nnXLen * nnYLen;
     float* policyProbs = output->policyProbs;
+    float* opponentPolicyProbs = output->opponentPolicyProbs;
 
     // These are in logits, the client does the postprocessing to turn them into
     // policy probabilities and white game outcome probabilities
@@ -2729,28 +2730,90 @@ void NeuralNet::getOutput(
     // Handle version >= 12 policy optimism
     if(numPolicyChannels == 2 || (numPolicyChannels == 4 && modelVersion >= 16)) {
        if(gpuHandle->usingNHWC) {
-        for(int i = 0; i<nnXLen*nnYLen; i++) {
-          float p = policySrcBuf[i*numPolicyChannels];
-          float pOpt = policySrcBuf[i*numPolicyChannels+1];
-          policyProbsTmp[i] = p + (pOpt-p) * policyOptimism;
+        // For 4-channel models (version >= 16):
+        // Channel 0: policy (p0loss)
+        // Channel 1: short-term optimistic policy
+        // Channel 2: opponent policy (p1loss)
+        // Channel 3: q value winloss
+        if(numPolicyChannels == 4 && modelVersion >= 16) {
+          // For 4-channel models (version >= 16):
+          // Exported order: [0, 1, 5, 6] -> [policy, opponent, optimistic, q winloss]
+          // Channel 0: policy (p0loss)
+          // Channel 1: opponent policy (p1loss)
+          // Channel 2: short-term optimistic policy
+          // Channel 3: q value winloss
+          for(int i = 0; i<nnXLen*nnYLen; i++) {
+            float p = policySrcBuf[i*numPolicyChannels];
+            float pOpponent = policySrcBuf[i*numPolicyChannels+1];  // Channel 1 is opponent
+            float pOpt = policySrcBuf[i*numPolicyChannels+2];  // Channel 2 is optimistic
+            policyProbsTmp[i] = p + (pOpt-p) * policyOptimism;
+            opponentPolicyProbs[i] = pOpponent;  // Store opponent policy
+          }
+          SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          SymmetryHelpers::copyOutputsWithSymmetry(opponentPolicyProbs, opponentPolicyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0] + (policyPassSrcBuf[2] - policyPassSrcBuf[0]) * policyOptimism;
+          opponentPolicyProbs[nnXLen*nnYLen] = policyPassSrcBuf[1];  // Opponent pass policy
         }
-        SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
-        policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0] + (policyPassSrcBuf[1] - policyPassSrcBuf[0]) * policyOptimism;
+        else {
+          // For 2-channel models (version >= 12 && version < 16):
+          // Channel 0: policy
+          // Channel 1: opponent policy (p1loss) - for adversarial training
+          for(int i = 0; i<nnXLen*nnYLen; i++) {
+            float p = policySrcBuf[i*numPolicyChannels];
+            float pOpponent = policySrcBuf[i*numPolicyChannels+1];
+            policyProbsTmp[i] = p;  // No optimism mixing for v12-v15
+            opponentPolicyProbs[i] = pOpponent;
+          }
+          SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          SymmetryHelpers::copyOutputsWithSymmetry(opponentPolicyProbs, opponentPolicyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0];  // No optimism
+          opponentPolicyProbs[nnXLen*nnYLen] = policyPassSrcBuf[1];  // Opponent pass policy
+        }
       }
       else {
-        for(int i = 0; i<nnXLen*nnYLen; i++) {
-          float p = policySrcBuf[i];
-          float pOpt = policySrcBuf[i+nnXLen*nnYLen];
-          policyProbsTmp[i] = p + (pOpt-p) * policyOptimism;
+        // NCHW format
+        if(numPolicyChannels == 4 && modelVersion >= 16) {
+          // For 4-channel models (version >= 16):
+          // Exported order: [0, 1, 5, 6] -> [policy, opponent, optimistic, q winloss]
+          // Channel 0: policy (p0loss)
+          // Channel 1: opponent policy (p1loss)
+          // Channel 2: short-term optimistic policy
+          // Channel 3: q value winloss
+          for(int i = 0; i<nnXLen*nnYLen; i++) {
+            float p = policySrcBuf[i];
+            float pOpponent = policySrcBuf[i+nnXLen*nnYLen];  // Channel 1 is opponent
+            float pOpt = policySrcBuf[i+2*nnXLen*nnYLen];  // Channel 2 is optimistic
+            policyProbsTmp[i] = p + (pOpt-p) * policyOptimism;
+            opponentPolicyProbs[i] = pOpponent;  // Store opponent policy
+          }
+          SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          SymmetryHelpers::copyOutputsWithSymmetry(opponentPolicyProbs, opponentPolicyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0] + (policyPassSrcBuf[2] - policyPassSrcBuf[0]) * policyOptimism;
+          opponentPolicyProbs[nnXLen*nnYLen] = policyPassSrcBuf[1];  // Opponent pass policy
         }
-        SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
-        policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0] + (policyPassSrcBuf[1] - policyPassSrcBuf[0]) * policyOptimism;
+        else {
+          // For 2-channel models (version >= 12 && version < 16):
+          // Channel 0: policy
+          // Channel 1: opponent policy (p1loss) - for adversarial training
+          for(int i = 0; i<nnXLen*nnYLen; i++) {
+            float p = policySrcBuf[i];
+            float pOpponent = policySrcBuf[i+nnXLen*nnYLen];
+            policyProbsTmp[i] = p;  // No optimism mixing for v12-v15
+            opponentPolicyProbs[i] = pOpponent;
+          }
+          SymmetryHelpers::copyOutputsWithSymmetry(policyProbsTmp, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          SymmetryHelpers::copyOutputsWithSymmetry(opponentPolicyProbs, opponentPolicyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+          policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0];  // No optimism
+          opponentPolicyProbs[nnXLen*nnYLen] = policyPassSrcBuf[1];  // Opponent pass policy
+        }
       }
     }
     else {
       assert(numPolicyChannels == 1);
       SymmetryHelpers::copyOutputsWithSymmetry(policySrcBuf, policyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
+      SymmetryHelpers::copyOutputsWithSymmetry(policySrcBuf, opponentPolicyProbs, 1, nnYLen, nnXLen, inputBufs[row]->symmetry);
       policyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0];
+      opponentPolicyProbs[nnXLen*nnYLen] = policyPassSrcBuf[0];  // Opponent pass policy
     }
 
     int numValueChannels = gpuHandle->model->numValueChannels;

@@ -1986,7 +1986,7 @@ void WriteSgf::writeSgf(
     commentOut << ",initTurnNum=" << gameData->startHist.initialTurnNumber;
     commentOut << ",gameHash=" << gameData->gameHash;
 
-    static_assert(FinishedGameData::NUM_MODES == 8, "");
+    static_assert(FinishedGameData::NUM_MODES == 9, "");
     if(gameData->mode == FinishedGameData::MODE_NORMAL)
       commentOut << "," << "gtype=normal";
     else if(gameData->mode == FinishedGameData::MODE_CLEANUP_TRAINING)
@@ -2003,6 +2003,8 @@ void WriteSgf::writeSgf(
       commentOut << "," << "gtype=hintfork";
     else if(gameData->mode == FinishedGameData::MODE_ASYM)
       commentOut << "," << "gtype=asym";
+    else if(gameData->mode == FinishedGameData::MODE_ADVERSARIAL)
+      commentOut << "," << "gtype=adversarial";
     else
       commentOut << "," << "gtype=other";
 

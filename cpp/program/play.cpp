@@ -1502,6 +1502,18 @@ FinishedGameData* Play::runGame(
 
   ClockTimer timer;
 
+  // For adversarial training: both players use opponent policy (p1loss)
+  if(playSettings.forSelfPlay) {
+    // Both players use opponent policy for adversarial training
+    botB->searchParams.useOpponentPolicy = true;
+    botW->searchParams.useOpponentPolicy = true;
+
+    // Mark game mode as adversarial
+    gameData->mode = FinishedGameData::MODE_ADVERSARIAL;
+    // Randomly choose attacker between black and white
+    gameData->attackerPlayer = gameRand.randBool() ? P_BLACK : P_WHITE;
+  }
+
   //Main play loop
   for(int i = 0; i<maxMovesPerGame; i++) {
     if(doEndGameIfAllPassAlive)
