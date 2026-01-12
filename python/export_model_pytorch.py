@@ -362,7 +362,8 @@ def main(args):
             assert policyhead.linear_pass.bias is None
         elif version <= 14:
             assert policyhead.conv2p.weight.shape[0] == 6
-            write_conv_weight(name+".conv2p", torch.stack((policyhead.conv2p.weight[0], policyhead.conv2p.weight[5]), dim=0))
+            # For adversarial training: export channel 0 (policy) and channel 1 (opponent policy)
+            write_conv_weight(name+".conv2p", torch.stack((policyhead.conv2p.weight[0], policyhead.conv2p.weight[1]), dim=0))
             assert policyhead.linear_pass.weight.shape[0] == 6
             # For adversarial training: export channel 0 (policy) and channel 1 (opponent policy)
             write_matmul(name+".linear_pass", torch.stack((policyhead.linear_pass.weight[0], policyhead.linear_pass.weight[1]), dim=0))
