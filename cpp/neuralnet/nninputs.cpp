@@ -56,18 +56,36 @@ static const double piOverTwo = 1.57079632679489661923;
 
 
 NNOutput::NNOutput()
-  :noisedPolicyProbs(NULL)
+  :whiteScoreMean(0.0f),
+   whiteScoreMeanSq(0.0f),
+   whiteLead(0.0f),
+   shorttermScoreError(0.0f),
+   policyOptimismUsed(0.0f),
+   whiteOwnerMap(NULL),
+   noisedPolicyProbs(NULL)
 {}
 NNOutput::NNOutput(const NNOutput& other) {
   nnHash = other.nnHash;
   whiteWinProb = other.whiteWinProb;
   whiteLossProb = other.whiteLossProb;
   whiteNoResultProb = other.whiteNoResultProb;
+  whiteScoreMean = other.whiteScoreMean;
+  whiteScoreMeanSq = other.whiteScoreMeanSq;
+  whiteLead = other.whiteLead;
   varTimeLeft = other.varTimeLeft;
   shorttermWinlossError = other.shorttermWinlossError;
+  shorttermScoreError = other.shorttermScoreError;
+  policyOptimismUsed = other.policyOptimismUsed;
 
   nnXLen = other.nnXLen;
   nnYLen = other.nnYLen;
+
+  if(other.whiteOwnerMap != NULL) {
+    whiteOwnerMap = new float[nnXLen * nnYLen];
+    std::copy(other.whiteOwnerMap, other.whiteOwnerMap + nnXLen * nnYLen, whiteOwnerMap);
+  }
+  else
+    whiteOwnerMap = NULL;
 
   if(other.noisedPolicyProbs != NULL) {
     noisedPolicyProbs = new float[NNPos::MAX_NN_POLICY_SIZE];
@@ -92,24 +110,39 @@ NNOutput::NNOutput(const vector<shared_ptr<NNOutput>>& others) {
   whiteWinProb = 0.0f;
   whiteLossProb = 0.0f;
   whiteNoResultProb = 0.0f;
+  whiteScoreMean = 0.0f;
+  whiteScoreMeanSq = 0.0f;
+  whiteLead = 0.0f;
   varTimeLeft = 0.0f;
   shorttermWinlossError = 0.0f;
+  shorttermScoreError = 0.0f;
   for(int i = 0; i<len; i++) {
     const NNOutput& other = *(others[i]);
     whiteWinProb += other.whiteWinProb;
     whiteLossProb += other.whiteLossProb;
     whiteNoResultProb += other.whiteNoResultProb;
+    whiteScoreMean += other.whiteScoreMean;
+    whiteScoreMeanSq += other.whiteScoreMeanSq;
+    whiteLead += other.whiteLead;
     varTimeLeft += other.varTimeLeft;
     shorttermWinlossError += other.shorttermWinlossError;
+    shorttermScoreError += other.shorttermScoreError;
   }
   whiteWinProb /= floatLen;
   whiteLossProb /= floatLen;
   whiteNoResultProb /= floatLen;
+  whiteScoreMean /= floatLen;
+  whiteScoreMeanSq /= floatLen;
+  whiteLead /= floatLen;
   varTimeLeft /= floatLen;
   shorttermWinlossError /= floatLen;
+  shorttermScoreError /= floatLen;
 
   nnXLen = others[0]->nnXLen;
   nnYLen = others[0]->nnYLen;
+
+  whiteOwnerMap = NULL;
+  policyOptimismUsed = others[0]->policyOptimismUsed;
 
   noisedPolicyProbs = NULL;
 
@@ -147,11 +180,25 @@ NNOutput& NNOutput::operator=(const NNOutput& other) {
   whiteWinProb = other.whiteWinProb;
   whiteLossProb = other.whiteLossProb;
   whiteNoResultProb = other.whiteNoResultProb;
+  whiteScoreMean = other.whiteScoreMean;
+  whiteScoreMeanSq = other.whiteScoreMeanSq;
+  whiteLead = other.whiteLead;
   varTimeLeft = other.varTimeLeft;
   shorttermWinlossError = other.shorttermWinlossError;
+  shorttermScoreError = other.shorttermScoreError;
+  policyOptimismUsed = other.policyOptimismUsed;
 
   nnXLen = other.nnXLen;
   nnYLen = other.nnYLen;
+
+  if(whiteOwnerMap != NULL)
+    delete[] whiteOwnerMap;
+  if(other.whiteOwnerMap != NULL) {
+    whiteOwnerMap = new float[nnXLen * nnYLen];
+    std::copy(other.whiteOwnerMap, other.whiteOwnerMap + nnXLen * nnYLen, whiteOwnerMap);
+  }
+  else
+    whiteOwnerMap = NULL;
 
   if(noisedPolicyProbs != NULL)
     delete[] noisedPolicyProbs;
@@ -169,6 +216,10 @@ NNOutput& NNOutput::operator=(const NNOutput& other) {
 
 
 NNOutput::~NNOutput() {
+  if(whiteOwnerMap != NULL) {
+    delete[] whiteOwnerMap;
+    whiteOwnerMap = NULL;
+  }
   if(noisedPolicyProbs != NULL) {
     delete[] noisedPolicyProbs;
     noisedPolicyProbs = NULL;

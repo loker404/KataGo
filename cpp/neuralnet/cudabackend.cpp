@@ -2018,7 +2018,11 @@ string NeuralNet::getModelName(const LoadedModel* loadedModel) {
 }
 
 int NeuralNet::getModelVersion(const LoadedModel* loadedModel) {
-  return loadedModel->modelDesc.version;
+  return loadedModel->modelDesc.modelVersion;
+}
+
+const ModelDesc& NeuralNet::getModelDesc(const LoadedModel* loadedModel) {
+  return loadedModel->modelDesc;
 }
 
 Rules NeuralNet::getSupportedRules(const LoadedModel* loadedModel, const Rules& desiredRules, bool& supported) {

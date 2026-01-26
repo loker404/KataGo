@@ -417,3 +417,11 @@ bool NeuralNet::testEvaluateConv(const ConvLayerDesc* desc, int batchSize, int n
 bool NeuralNet::testEvaluateBatchNorm(const BatchNormLayerDesc* desc, int batchSize, int nnXLen, int nnYLen, bool useFP16, bool useNHWC, const std::vector<float>& inputBuffer, const std::vector<float>& maskBuffer, std::vector<float>& outputBuffer) { return false; }
 bool NeuralNet::testEvaluateResidualBlock(const ResidualBlockDesc* desc, int batchSize, int nnXLen, int nnYLen, bool useFP16, bool useNHWC, const std::vector<float>& inputBuffer, const std::vector<float>& maskBuffer, std::vector<float>& outputBuffer) { return false; }
 bool NeuralNet::testEvaluateGlobalPoolingResidualBlock(const GlobalPoolingResidualBlockDesc* desc, int batchSize, int nnXLen, int nnYLen, bool useFP16, bool useNHWC, const std::vector<float>& inputBuffer, const std::vector<float>& maskBuffer, std::vector<float>& outputBuffer) { return false; }
+
+std::string NeuralNet::getModelName(const LoadedModel* loadedModel) {
+  return loadedModel->modelDesc.name;
+}
+
+Rules NeuralNet::getSupportedRules(const LoadedModel* loadedModel, const Rules& desiredRules, bool& supported) {
+  return loadedModel->modelDesc.getSupportedRules(desiredRules, supported);
+}

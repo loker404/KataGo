@@ -4,6 +4,8 @@
 #include "../core/global.h"
 #include "../game/board.h"
 
+#include "../external/nlohmann_json/json.hpp"
+
 struct SearchParams {
   //Utility function parameters
   double winLossUtilityFactor;     //Scaling for [-1,1] value for winning/losing
@@ -116,6 +118,11 @@ struct SearchParams {
   ~SearchParams();
 
   void printParams(std::ostream& out);
+
+  bool operator==(const SearchParams& other) const;
+  bool operator!=(const SearchParams& other) const;
+
+  nlohmann::json changeableParametersToJson() const;
 
   //Params to use for testing, with some more recent values representative of more real use (as of Jan 2019)
   static SearchParams forTestsV1();

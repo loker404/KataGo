@@ -7,6 +7,7 @@
 #include "../core/commontypes.h"
 #include "../core/logger.h"
 #include "../core/multithread.h"
+#include "../core/threadsafequeue.h"
 #include "../game/board.h"
 #include "../game/boardhistory.h"
 #include "../neuralnet/nninputs.h"
@@ -46,15 +47,17 @@ struct NNResultBuf {
   std::condition_variable clientWaitingForResult;
   std::mutex resultMutex;
   bool hasResult;
+  bool includeOwnerMap;
   int boardXSizeForServer;
   int boardYSizeForServer;
-  int rowSpatialSize;
-  int rowGlobalSize;
-  float* rowSpatial;
-  float* rowGlobal;
+  std::vector<float> rowSpatialBuf;
+  std::vector<float> rowGlobalBuf;
+  std::vector<float> rowMetaBuf;
+  bool hasRowMeta;
   std::shared_ptr<NNOutput> result;
   bool errorLogLockout; //error flag to restrict log to 1 error to prevent spam
   int symmetry; //The symmetry to use for this eval
+  double policyOptimism; //The policy optimism to use for this eval
 
   NNResultBuf();
   ~NNResultBuf();
@@ -179,6 +182,7 @@ class NNEvaluator {
 
  private:
   const std::string modelName;
+  std::string internalModelName;
   const std::string modelFileName;
   int nnXLen;
   int nnYLen;
@@ -235,6 +239,10 @@ class NNEvaluator {
 
   //Queued up requests
   ThreadSafeQueue<NNResultBuf*> queryQueue;
+  NNResultBuf*** m_resultBufss;
+  int m_currentResultBufsIdx;
+  int m_currentResultBufsLen;
+  int m_oldestResultBufsIdx;
   friend class ONNXModelHeader;
  public:
   //Helper, for internal use only

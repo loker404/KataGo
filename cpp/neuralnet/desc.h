@@ -257,9 +257,25 @@ struct ValueHeadDesc {
   void iterConvLayers(std::function<void(const ConvLayerDesc& dest)> f) const;
 };
 
+
+struct ModelPostProcessParams {
+  double tdScoreMultiplier;
+  double scoreMeanMultiplier;
+  double scoreStdevMultiplier;
+  double leadMultiplier;
+  double varianceTimeMultiplier;
+  double shorttermValueErrorMultiplier;
+  double shorttermScoreErrorMultiplier;
+
+  float outputScaleMultiplier;
+
+  ModelPostProcessParams();
+  ~ModelPostProcessParams();
+};
+
 struct ModelDesc {
   std::string name;
-  int version;
+  int modelVersion;
   int numInputChannels;
   int numInputGlobalChannels;
   int numValueChannels;
@@ -267,6 +283,8 @@ struct ModelDesc {
   int numOwnershipChannels;
 
   int metaEncoderVersion;
+  int numInputMetaChannels;
+  int numPolicyChannels;
 
   //std::map<std::string, std::string> onnxMetadata; //only non-empty when loading from ONNX
   ONNXModelHeader onnxHeader;

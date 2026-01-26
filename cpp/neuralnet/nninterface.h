@@ -44,6 +44,7 @@ namespace NeuralNet {
 
   std::string getModelName(const LoadedModel* loadedModel);
   int getModelVersion(const LoadedModel* loadedModel);
+  const ModelDesc& getModelDesc(const LoadedModel* loadedModel);
 
   //Return the "nearest" supported ruleset to desiredRules by this model.
   //Fills supported with true if desiredRules itself was exactly supported, false if some modifications had to be made.

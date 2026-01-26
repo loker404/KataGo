@@ -970,7 +970,7 @@ void ValueHeadDesc::iterConvLayers(std::function<void(const ConvLayerDesc& desc)
 //-----------------------------------------------------------------------------
 
 ModelDesc::ModelDesc()
-  : version(-1),
+  : modelVersion(-1),
     numInputChannels(0),
     numInputGlobalChannels(0),
     numValueChannels(0),
@@ -978,6 +978,7 @@ ModelDesc::ModelDesc()
     numOwnershipChannels(0) {}
 
 ModelDesc::ModelDesc(istream& in, bool binaryFloats) {
+  int version;
   in >> name;
   in >> version;
   if(in.fail())
@@ -989,6 +990,7 @@ ModelDesc::ModelDesc(istream& in, bool binaryFloats) {
     throw StringError("This neural net is from an extremely old version of KataGo and is no longer supported by the engine. Model version: " + Global::intToString(version));
   if(version > NNModelVersion::latestModelVersionImplemented)
     throw StringError("This neural net requires a newer KataGo version. Obtain a newer KataGo at https://github.com/lightvector/KataGo. Model version: " + Global::intToString(version));
+  modelVersion = version;
 
   in >> numInputChannels;
   if(in.fail())
@@ -1054,7 +1056,7 @@ ModelDesc::ModelDesc(ModelDesc&& other) {
 
 ModelDesc& ModelDesc::operator=(ModelDesc&& other) {
   name = std::move(other.name);
-  version = other.version;
+  modelVersion = other.modelVersion;
   numInputChannels = other.numInputChannels;
   numInputGlobalChannels = other.numInputGlobalChannels;
   numValueChannels = other.numValueChannels;
@@ -1176,7 +1178,7 @@ Rules ModelDesc::getSupportedRules(const Rules& desiredRules, bool& supported) c
   static_assert(NNModelVersion::latestModelVersionImplemented == 11, "");
   Rules rules = desiredRules;
   supported = true;
-  if(version <= 11) {
+  if(modelVersion <= 11) {
   }
   else {
     ASSERT_UNREACHABLE;
@@ -1184,3 +1186,17 @@ Rules ModelDesc::getSupportedRules(const Rules& desiredRules, bool& supported) c
 
   return rules;
 }
+
+ModelPostProcessParams::ModelPostProcessParams()
+  : tdScoreMultiplier(20.0),
+    scoreMeanMultiplier(20.0),
+    scoreStdevMultiplier(20.0),
+    leadMultiplier(20.0),
+    varianceTimeMultiplier(40.0),
+    shorttermValueErrorMultiplier(0.25),
+    shorttermScoreErrorMultiplier(30.0),
+    outputScaleMultiplier(1.0f)
+{}
+
+ModelPostProcessParams::~ModelPostProcessParams()
+{}

@@ -70,18 +70,28 @@ struct NNOutput {
   float whiteLossProb;
   float whiteNoResultProb;
 
+  //The first two moments of the believed distribution of the expected score at the end of the game, from white's perspective.
+  float whiteScoreMean;
+  float whiteScoreMeanSq;
+  //Points to make game fair
+  float whiteLead;
   //Expected arrival time of remaining game variance, in turns, weighted by variance, only when modelVersion >= 9
   float varTimeLeft;
   //A metric indicating the "typical" error in the winloss value or the score that the net expects, relative to the
   //short-term future MCTS value.
   float shorttermWinlossError;
+  float shorttermScoreError;
 
   //Indexed by pos rather than loc
   //Values in here will be set to negative for illegal moves, including superko
   float policyProbs[NNPos::MAX_NN_POLICY_SIZE];
+  //The optimism value used for this neural net evaluation.
+  float policyOptimismUsed;
 
   int nnXLen;
   int nnYLen;
+  //If not NULL, then this contains a nnXLen*nnYLen-sized map of expected ownership on the board.
+  float* whiteOwnerMap;
 
   //If not NULL, then contains policy with dirichlet noise or any other noise adjustments for this node
   float* noisedPolicyProbs;

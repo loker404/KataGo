@@ -10,23 +10,21 @@ NNResultBuf::NNResultBuf()
   : clientWaitingForResult(),
     resultMutex(),
     hasResult(false),
+    includeOwnerMap(false),
     boardXSizeForServer(0),
     boardYSizeForServer(0),
-    rowSpatialSize(0),
-    rowGlobalSize(0),
-    rowSpatial(NULL),
-    rowGlobal(NULL),
+    rowSpatialBuf(),
+    rowGlobalBuf(),
+    rowMetaBuf(),
+    hasRowMeta(false),
     result(nullptr),
     errorLogLockout(false),
     // If no symmetry is specified, it will use default or random based on config.
-    symmetry(NNInputs::SYMMETRY_NOTSPECIFIED)
+    symmetry(NNInputs::SYMMETRY_NOTSPECIFIED),
+    policyOptimism(0.0)
 {}
 
 NNResultBuf::~NNResultBuf() {
-  if(rowSpatial != NULL)
-    delete[] rowSpatial;
-  if(rowGlobal != NULL)
-    delete[] rowGlobal;
 }
 
 //-------------------------------------------------------------------------------------
@@ -635,28 +633,15 @@ void NNEvaluator::evaluate(
 
   if(!debugSkipNeuralNet) {
     int rowSpatialLen = NNModelVersion::getNumSpatialFeatures(modelVersion) * nnXLen * nnYLen;
-    if(buf.rowSpatial == NULL) {
-      buf.rowSpatial = new float[rowSpatialLen];
-      buf.rowSpatialSize = rowSpatialLen;
-    }
-    else {
-      if(buf.rowSpatialSize != rowSpatialLen)
-        throw StringError("Cannot reuse an nnResultBuf with different dimensions or model version");
-    }
+    if(buf.rowSpatialBuf.size() < rowSpatialLen)
+      buf.rowSpatialBuf.resize(rowSpatialLen);
     int rowGlobalLen = NNModelVersion::getNumGlobalFeatures(modelVersion);
-    if(buf.rowGlobal == NULL) {
-      buf.rowGlobal = new float[rowGlobalLen];
-      buf.rowGlobalSize = rowGlobalLen;
-    }
-    else {
-      if(buf.rowGlobalSize != rowGlobalLen)
-        throw StringError("Cannot reuse an nnResultBuf with different dimensions or model version");
-    }
-
+    if(buf.rowGlobalBuf.size() < rowGlobalLen)
+      buf.rowGlobalBuf.resize(rowGlobalLen);
 
     static_assert(NNModelVersion::latestInputsVersionImplemented == 7, "");
     if(inputsVersion == 7)
-      NNInputs::fillRowV7(board, history, nextPlayer, nnInputParamsWithResultsBeforeNN, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatial, buf.rowGlobal);
+      NNInputs::fillRowV7(board, history, nextPlayer, nnInputParamsWithResultsBeforeNN, nnXLen, nnYLen, inputsUseNHWC, buf.rowSpatialBuf.data(), buf.rowGlobalBuf.data());
     else
       ASSERT_UNREACHABLE;
   }
