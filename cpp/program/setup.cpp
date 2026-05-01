@@ -899,7 +899,6 @@ Rules Setup::loadSingleRules(
     if(cfg.contains("whiteHandicapBonus")) throw StringError("Cannot both specify 'rules' and individual rules like whiteHandicapBonus");
     if(cfg.contains("friendlyPassOk")) throw StringError("Cannot both specify 'rules' and individual rules like friendlyPassOk");
     if(cfg.contains("whiteBonusPerHandicapStone")) throw StringError("Cannot both specify 'rules' and individual rules like whiteBonusPerHandicapStone");
-    if(cfg.contains("flyingKnife")) throw StringError("Cannot both specify 'rules' and individual rules like flyingKnife");
 
     rules = Rules::parseRules(cfg.getString("rules"));
   }
@@ -946,16 +945,17 @@ Rules Setup::loadSingleRules(
       rules.friendlyPassOk = cfg.getBool("friendlyPassOk");
     }
 
-    if(cfg.contains("flyingKnife")) {
-      string fkStr = cfg.getString("flyingKnife");
-      rules.fkConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
-    }
-
     //Drop default komi to 6.5 for territory rules, and to 7.0 for button
     if(rules.scoringRule == Rules::SCORING_TERRITORY)
       rules.komi = 6.5f;
     else if(rules.hasButton)
       rules.komi = 7.0f;
+  }
+
+  // flyingKnife can always be specified as an override, even with rules
+  if(cfg.contains("flyingKnife")) {
+    string fkStr = cfg.getString("flyingKnife");
+    rules.fkConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
   }
 
   if(loadKomi) {
