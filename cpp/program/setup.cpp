@@ -955,7 +955,7 @@ Rules Setup::loadSingleRules(
   // flyingKnife can always be specified as an override, even with rules
   if(cfg.contains("flyingKnife")) {
     string fkStr = cfg.getString("flyingKnife");
-    rules.fkConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
+    rules.fkConfig = FlyingKnifeConfig::fromString(fkStr);
   }
 
   if(loadKomi) {

@@ -20,6 +20,7 @@ struct FlyingKnifeConfig {
 
   nlohmann::json toJson() const;
   static FlyingKnifeConfig fromJson(const nlohmann::json& j);
+  static FlyingKnifeConfig fromString(const std::string& s);
   std::string toString() const;
 
   bool operator==(const FlyingKnifeConfig& other) const;

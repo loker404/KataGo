@@ -58,6 +58,65 @@ FlyingKnifeConfig FlyingKnifeConfig::fromJson(const nlohmann::json& j) {
   return config;
 }
 
+FlyingKnifeConfig FlyingKnifeConfig::fromString(const std::string& sOrig) {
+  FlyingKnifeConfig config;
+  string s = Global::trim(sOrig);
+
+  // If it starts with '{', parse as JSON
+  if(s.length() > 0 && s[0] == '{') {
+    json j = json::parse(s);
+    return FlyingKnifeConfig::fromJson(j);
+  }
+
+  // Otherwise parse as simple key-value pairs
+  vector<string> pairs;
+  if(s.find(';') != string::npos)
+    pairs = Global::split(s, ';');
+  else
+    pairs = Global::split(s, ',');
+
+  for(const string& pair : pairs) {
+    string trimmedPair = Global::trim(pair);
+    if(trimmedPair.length() == 0) continue;
+
+    size_t eqPos = trimmedPair.find('=');
+    if(eqPos == string::npos)
+      throw IOError("FlyingKnifeConfig: invalid key-value pair: " + trimmedPair);
+
+    string key = Global::trim(Global::toLower(trimmedPair.substr(0, eqPos)));
+    string valueStr = Global::trim(trimmedPair.substr(eqPos + 1));
+
+    int value;
+    if(!Global::tryStringToInt(valueStr, value))
+      throw IOError("FlyingKnifeConfig: invalid integer value: " + valueStr);
+
+    if(key == "rangestart" || key == "start" || key == "rstart")
+      config.triggerRangeStart = value;
+    else if(key == "rangeend" || key == "end" || key == "rend")
+      config.triggerRangeEnd = value;
+    else if(key == "blackknife" || key == "bknife" || key == "bk")
+      config.blackKnifeCount = value;
+    else if(key == "blacksickle" || key == "bsickle" || key == "bs")
+      config.blackSickleCount = value;
+    else if(key == "whiteknife" || key == "wknife" || key == "wk")
+      config.whiteKnifeCount = value;
+    else if(key == "whitesickle" || key == "wsickle" || key == "ws")
+      config.whiteSickleCount = value;
+    else
+      throw IOError("FlyingKnifeConfig: unknown key: " + key);
+  }
+
+  if(config.triggerRangeStart < 0)
+    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
+  if(config.triggerRangeEnd < config.triggerRangeStart)
+    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
+  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
+     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
+    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+
+  return config;
+}
+
 std::string FlyingKnifeConfig::toString() const {
   if(!isEnabled()) return "none";
   std::ostringstream out;
@@ -482,7 +541,10 @@ static Rules parseRulesHelper(const string& sOrig, bool allowKomi) {
             throw IOError("Komi value is not a half-integer or is too extreme");
         }
         else if(key == "flyingKnife") {
-          rules.fkConfig = FlyingKnifeConfig::fromJson(iter.value());
+          if(iter.value().is_string())
+            rules.fkConfig = FlyingKnifeConfig::fromString(iter.value().get<string>());
+          else
+            rules.fkConfig = FlyingKnifeConfig::fromJson(iter.value());
         }
         else
           throw IOError("Unknown rules option: " + key);
