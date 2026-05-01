@@ -131,6 +131,12 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
       throw IOError("If scoringRules does not include AREA, hasButtons must be false in " + cfg.getFileName());
   }
 
+  flyingKnifeEnabledRate = cfg.contains("flyingKnifeEnabledRate") ? cfg.getDouble("flyingKnifeEnabledRate",0.0,1.0) : 0.0;
+  if(cfg.contains("flyingKnife")) {
+    string fkStr = cfg.getString("flyingKnife");
+    flyingKnifeConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
+  }
+
   if(cfg.contains("bSizes") == cfg.contains("bSizesXY"))
     throw IOError("Must specify exactly one of bSizes or bSizesXY");
 
@@ -476,6 +482,10 @@ Rules GameInitializer::createRulesUnsynchronized() {
     rules.hasButton = allowedButtons[rand.nextUInt((uint32_t)allowedButtons.size())];
   else
     rules.hasButton = false;
+
+  if(flyingKnifeEnabledRate > 0.0 && rand.nextDouble() < flyingKnifeEnabledRate)
+    rules.fkConfig = flyingKnifeConfig;
+
   return rules;
 }
 

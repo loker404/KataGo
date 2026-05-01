@@ -899,6 +899,7 @@ Rules Setup::loadSingleRules(
     if(cfg.contains("whiteHandicapBonus")) throw StringError("Cannot both specify 'rules' and individual rules like whiteHandicapBonus");
     if(cfg.contains("friendlyPassOk")) throw StringError("Cannot both specify 'rules' and individual rules like friendlyPassOk");
     if(cfg.contains("whiteBonusPerHandicapStone")) throw StringError("Cannot both specify 'rules' and individual rules like whiteBonusPerHandicapStone");
+    if(cfg.contains("flyingKnife")) throw StringError("Cannot both specify 'rules' and individual rules like flyingKnife");
 
     rules = Rules::parseRules(cfg.getString("rules"));
   }
@@ -943,6 +944,11 @@ Rules Setup::loadSingleRules(
 
     if(cfg.contains("friendlyPassOk")) {
       rules.friendlyPassOk = cfg.getBool("friendlyPassOk");
+    }
+
+    if(cfg.contains("flyingKnife")) {
+      string fkStr = cfg.getString("flyingKnife");
+      rules.fkConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
     }
 
     //Drop default komi to 6.5 for territory rules, and to 7.0 for button

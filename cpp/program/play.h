@@ -178,6 +178,9 @@ class GameInitializer {
   int minBoardYSize;
   int maxBoardXSize;
   int maxBoardYSize;
+
+  double flyingKnifeEnabledRate;
+  FlyingKnifeConfig flyingKnifeConfig;
 };
 
 
