@@ -745,7 +745,9 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
       );
 
     //Recurse
+    thread.graphPath.insert(child);
     bool shouldUpdateChildAncestors = playoutDescend(thread, *child, false);
+    thread.graphPath.erase(child);
     if(shouldUpdateChildAncestors) {
       nodeState = node.state.load(std::memory_order_acquire);
       SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
@@ -793,7 +795,9 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   }
 
   //Recurse into the new child
+  thread.graphPath.insert(child);
   bool shouldUpdateChildAncestors = playoutDescend(thread, *child, false);
+  thread.graphPath.erase(child);
   if(shouldUpdateChildAncestors) {
     nodeState = node.state.load(std::memory_order_acquire);
     SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);

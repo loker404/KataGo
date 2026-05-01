@@ -336,9 +336,11 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   rootPla = rootHistory.presumedNextMovePla;
   rootKoHashTable->recompute(rootHistory);
 
-  //If flying knife state changed after the move (e.g. sequence ended),
-  //the tree structure may be invalidated. Clear the search to rebuild from the new state.
-  if(rootHistory.rules.fkConfig.isEnabled() && rootHistory.fkState != fkStateBefore)
+  //If a new flying knife trigger just fired, the tree structure changes fundamentally
+  //(a chance node is inserted). Clear the search to rebuild from the new state.
+  //During a sequence (remainingMovesInSequence decrementing), the tree is still valid.
+  if(rootHistory.rules.fkConfig.isEnabled() &&
+     fkStateBefore.remainingMovesInSequence == 0 && rootHistory.fkState.remainingMovesInSequence > 0)
     clearSearch();
 
   if(rootNode != NULL) {

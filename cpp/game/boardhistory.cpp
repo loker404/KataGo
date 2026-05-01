@@ -1375,6 +1375,11 @@ const Hash128 FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[3] = {
   Hash128(0x2730eeef8986428dULL, 0xffbec9da27b29eb2ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[2]"
 };
 
+const uint64_t FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT0 = 0x4a2e83f17b5d9c6aULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT1 = 0x7e1d483a9f26c5b0ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT0 = 0xd385f62e14a79b0cULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT1 = 0x29c4b7e86f31d5a0ULL;
+
 //Flying knife initialization and trigger methods
 
 void BoardHistory::initFlyingKnifeState() {

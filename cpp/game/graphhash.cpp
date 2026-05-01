@@ -25,6 +25,11 @@ Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, dou
     hash ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(hist.fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
     testAssert(hist.fkState.abilityOwner >= 0 && hist.fkState.abilityOwner <= 2);
     hash ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[hist.fkState.abilityOwner];
+    //Fold in per-player ability counts so positions with different remaining abilities have distinct hashes
+    hash.hash0 += FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT0 * (uint64_t)(hist.fkState.blackKnivesRemaining + hist.fkState.whiteKnivesRemaining);
+    hash.hash1 += FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT1 * (uint64_t)(hist.fkState.blackKnivesRemaining + hist.fkState.whiteKnivesRemaining);
+    hash.hash0 += FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT0 * (uint64_t)(hist.fkState.blackSicklesRemaining + hist.fkState.whiteSicklesRemaining);
+    hash.hash1 += FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT1 * (uint64_t)(hist.fkState.blackSicklesRemaining + hist.fkState.whiteSicklesRemaining);
   }
 
   return hash;
