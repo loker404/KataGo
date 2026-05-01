@@ -1409,7 +1409,7 @@ void BoardHistory::initFlyingKnifeState() {
   fkState.abilityOwner = C_EMPTY;
 }
 
-int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand) {
+int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla) {
   if(!rules.fkConfig.isEnabled())
     return 0;
   if(fkState.isInSequence())
@@ -1419,7 +1419,6 @@ int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand) {
   if(moveNumber < rules.fkConfig.triggerRangeStart || moveNumber > rules.fkConfig.triggerRangeEnd)
     return 0;
 
-  Player pla = presumedNextMovePla;
   int knives = fkState.getKnivesRemaining(pla);
   int sickles = fkState.getSicklesRemaining(pla);
 

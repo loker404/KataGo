@@ -1052,7 +1052,7 @@ struct GTPEngine {
       if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
         int moveNumber = (int)hist.moveHistory.size();
         if(!hist.fkState.isInSequence()) {
-          int abilityType = hist.checkAndActivateAbility(moveNumber, gtpRand);
+          int abilityType = hist.checkAndActivateAbility(moveNumber, gtpRand, hist.moveHistory.back().pla);
           if(abilityType > 0) {
             response += " # flying_knife " + Global::intToString(abilityType);
             logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");

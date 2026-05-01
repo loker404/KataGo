@@ -1692,7 +1692,7 @@ FinishedGameData* Play::runGame(
     //Flying knife: if no sequence is active, check if we should trigger a new ability
     if(hist.rules.fkConfig.isEnabled() && !hist.fkState.isInSequence()) {
       int moveNumber = (int)hist.moveHistory.size();
-      hist.checkAndActivateAbility(moveNumber, gameRand);
+      hist.checkAndActivateAbility(moveNumber, gameRand, hist.moveHistory.back().pla);
     }
 
     //Use presumedNextMovePla to handle flying knife sequences correctly

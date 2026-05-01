@@ -654,8 +654,8 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
   int moveNumber = (int)thread.history.moveHistory.size() + 1;
   if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
     return false;
-  //Check if current player has any remaining abilities
-  Player pla = thread.history.presumedNextMovePla;
+  //Check if the player who just moved has any remaining abilities
+  Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   return (knives + sickles) > 0;
@@ -664,7 +664,7 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
 float Search::computeTriggerProbability(const SearchThread& thread) const {
   const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
   int moveNumber = (int)thread.history.moveHistory.size() + 1;
-  Player pla = thread.history.presumedNextMovePla;
+  Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   int totalAbilities = knives + sickles;
@@ -673,7 +673,7 @@ float Search::computeTriggerProbability(const SearchThread& thread) const {
 }
 
 int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
-  Player pla = thread.history.presumedNextMovePla;
+  Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   int totalAbilities = knives + sickles;
@@ -708,7 +708,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   int chanceChild = selectChanceChild(thread, triggerProb);
 
   //Determine number of children for this chance node: always child 0 (no-trigger), maybe child 1 (knife), maybe child 2 (sickle)
-  Player pla = thread.pla;
+  Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
 

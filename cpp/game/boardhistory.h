@@ -169,7 +169,7 @@ struct BoardHistory {
   //Check and possibly activate a flying knife/sickle ability after a move.
   //Returns: 0=none, 2=knife activated, 3=sickle activated.
   //moveNumber is the current move count (number of moves already played).
-  int checkAndActivateAbility(int moveNumber, Rand& rand);
+  int checkAndActivateAbility(int moveNumber, Rand& rand, Player pla);
   //Set overrideNumHandicapStones and update bonus points accordingly
   void setOverrideNumHandicapStones(int n);
 
