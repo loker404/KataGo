@@ -140,6 +140,7 @@ BoardHistory::BoardHistory(const BoardHistory& other)
   std::copy(other.superKoBanned, other.superKoBanned+Board::MAX_ARR_SIZE, superKoBanned);
   std::copy(other.koRecapBlocked, other.koRecapBlocked+Board::MAX_ARR_SIZE, koRecapBlocked);
   std::copy(other.secondEncoreStartColors, other.secondEncoreStartColors+Board::MAX_ARR_SIZE, secondEncoreStartColors);
+  fkState = other.fkState;
 }
 
 
@@ -185,6 +186,7 @@ BoardHistory& BoardHistory::operator=(const BoardHistory& other)
   isScored = other.isScored;
   isNoResult = other.isNoResult;
   isResignation = other.isResignation;
+  fkState = other.fkState;
 
   return *this;
 }
@@ -225,6 +227,7 @@ BoardHistory::BoardHistory(BoardHistory&& other) noexcept
   std::copy(other.superKoBanned, other.superKoBanned+Board::MAX_ARR_SIZE, superKoBanned);
   std::copy(other.koRecapBlocked, other.koRecapBlocked+Board::MAX_ARR_SIZE, koRecapBlocked);
   std::copy(other.secondEncoreStartColors, other.secondEncoreStartColors+Board::MAX_ARR_SIZE, secondEncoreStartColors);
+  fkState = other.fkState;
 }
 
 BoardHistory& BoardHistory::operator=(BoardHistory&& other) noexcept
@@ -267,6 +270,7 @@ BoardHistory& BoardHistory::operator=(BoardHistory&& other) noexcept
   isScored = other.isScored;
   isNoResult = other.isNoResult;
   isResignation = other.isResignation;
+  fkState = other.fkState;
 
   return *this;
 }
@@ -321,6 +325,10 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
   isScored = false;
   isNoResult = false;
   isResignation = false;
+
+  //Initialize flying knife state
+  fkState = FlyingKnifeState();
+  initFlyingKnifeState();
 
   //Handle encore phase
   encorePhase = ePhase;
@@ -940,6 +948,10 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   bool isSpightlikeEndingPass = false;
   if(moveLoc != Board::PASS_LOC)
     consecutiveEndingPasses = 0;
+  else if(fkState.isInSequence()) {
+    //During a flying knife sequence, pass does not count toward game ending
+    consecutiveEndingPasses = 0;
+  }
   else if(hasButton) {
     assert(encorePhase == 0 && rules.hasButton);
     hasButton = false;
@@ -1028,14 +1040,29 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   currentRecentBoardIdx = (currentRecentBoardIdx + 1) % NUM_RECENT_BOARDS;
   recentBoards[currentRecentBoardIdx] = board;
 
-  Hash128 koHashAfterThisMove = getKoHash(rules,board,getOpp(movePla),encorePhase,koRecapBlockHash);
+  //Determine the next player: during a flying knife sequence, the same player continues
+  Player nextPlaAfterMove;
+  if(fkState.isInSequence()) {
+    fkState.remainingMovesInSequence--;
+    nextPlaAfterMove = movePla;  // Same player continues
+  } else {
+    nextPlaAfterMove = getOpp(movePla);  // Normal alternation
+  }
+
+  Hash128 koHashAfterThisMove = getKoHash(rules,board,nextPlaAfterMove,encorePhase,koRecapBlockHash);
+  //Mix in flying knife state for position uniqueness
+  if(rules.fkConfig.isEnabled()) {
+    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
+    testAssert(fkState.abilityOwner >= 0 && fkState.abilityOwner <= 2);
+    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[fkState.abilityOwner];
+  }
   koHashHistory.push_back(koHashAfterThisMove);
   moveHistory.emplace_back(moveLoc,movePla);
   preventEncoreHistory.push_back(preventEncore);
   numTurnsThisPhase += 1;
   numApproxValidTurnsThisPhase += 1;
   numConsecValidTurnsThisGame += 1;
-  presumedNextMovePla = getOpp(movePla);
+  presumedNextMovePla = nextPlaAfterMove;
 
   if(moveIsIllegal)
     numConsecValidTurnsThisGame = 0;
@@ -1044,7 +1071,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     wasEverOccupiedOrPlayed[moveLoc] = true;
 
   //Mark all locations that are superko-illegal for the next player, by iterating and testing each point.
-  Player nextPla = getOpp(movePla);
+  Player nextPla = nextPlaAfterMove;
   if(encorePhase <= 0 && rules.koRule != Rules::KO_SIMPLE) {
     assert(koRecapBlockHash == Hash128());
     for(int y = 0; y<board.y_size; y++) {
@@ -1332,4 +1359,75 @@ int KoHashTable::numberOfOccurrencesOfHash(Hash128 hash) const {
     idx++;
   }
   return count;
+}
+
+//FlyingKnifeState Zobrist constants
+const Hash128 FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[FlyingKnifeState::MAX_FK_SEQUENCE_MOVES + 1] = {
+  Hash128(0x0000000000000000ULL, 0x0000000000000000ULL),  // 0 remaining moves (no sequence)
+  Hash128(0x9a62a0fefd121f86ULL, 0x324832bc7c03a336ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[1]"
+  Hash128(0x7c671ca1c6eebd3dULL, 0x240536ce1c183500ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[2]"
+  Hash128(0x20967ea7294cc9bbULL, 0xe273b207de90732bULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[3]"
+};
+
+const Hash128 FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[3] = {
+  Hash128(0x0000000000000000ULL, 0x0000000000000000ULL),  // C_EMPTY (no ability owner)
+  Hash128(0xacba7264f60f9b60ULL, 0x85e468f3c86272c7ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[1]"
+  Hash128(0x2730eeef8986428dULL, 0xffbec9da27b29eb2ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[2]"
+};
+
+//Flying knife initialization and trigger methods
+
+void BoardHistory::initFlyingKnifeState() {
+  if(!rules.fkConfig.isEnabled()) {
+    fkState = FlyingKnifeState();
+    return;
+  }
+  fkState.blackKnivesRemaining = rules.fkConfig.blackKnifeCount;
+  fkState.blackSicklesRemaining = rules.fkConfig.blackSickleCount;
+  fkState.whiteKnivesRemaining = rules.fkConfig.whiteKnifeCount;
+  fkState.whiteSicklesRemaining = rules.fkConfig.whiteSickleCount;
+  fkState.remainingMovesInSequence = 0;
+  fkState.abilityOwner = C_EMPTY;
+}
+
+int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand) {
+  if(!rules.fkConfig.isEnabled())
+    return 0;
+  if(fkState.isInSequence())
+    return 0;
+
+  //Check if we're in the trigger range
+  if(moveNumber < rules.fkConfig.triggerRangeStart || moveNumber > rules.fkConfig.triggerRangeEnd)
+    return 0;
+
+  Player pla = presumedNextMovePla;
+  int knives = fkState.getKnivesRemaining(pla);
+  int sickles = fkState.getSicklesRemaining(pla);
+
+  int totalAbilities = knives + sickles;
+  if(totalAbilities == 0)
+    return 0;
+
+  //Compute trigger probability based on remaining abilities and remaining range
+  int remainingRange = rules.fkConfig.triggerRangeEnd - moveNumber + 1;
+  //Probability: totalAbilities / (remainingRange + totalAbilities) -- gives reasonable distribution
+  double triggerProb = (double)totalAbilities / (double)(remainingRange + totalAbilities);
+  if(!rand.nextBool(triggerProb))
+    return 0;
+
+  //Trigger! Choose between knife and sickle weighted by remaining counts
+  int chosen = rand.nextInt(1, totalAbilities);
+  int abilityType;
+  if(chosen <= knives) {
+    abilityType = FlyingKnifeConfig::getKnifeMoves();  // knife
+    fkState.decrementKnives(pla);
+  } else {
+    abilityType = FlyingKnifeConfig::getSickleMoves();  // sickle
+    fkState.decrementSickles(pla);
+  }
+
+  fkState.remainingMovesInSequence = abilityType;  // 2 for knife, 3 for sickle
+  fkState.abilityOwner = pla;
+
+  return abilityType;
 }

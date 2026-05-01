@@ -180,6 +180,8 @@ struct SearchNode {
   //Constant during search--------------------------------------------------------------
   const Player nextPla;
   const bool forceNonTerminal;
+  const bool isChanceNode;
+  const float chanceNodeProb; // Trigger probability p (only meaningful for chance nodes)
   Hash128 patternBonusHash;
   const uint32_t mutexIdx; // For lookup into mutex pool
 
@@ -236,6 +238,7 @@ struct SearchNode {
 
   //--------------------------------------------------------------------------------
   SearchNode(Player prevPla, bool forceNonTerminal, uint32_t mutexIdx, Hash128 graphHash);
+  SearchNode(Player prevPla, bool forceNonTerminal, bool isChanceNode, float chanceNodeProb, uint32_t mutexIdx, Hash128 graphHash);
   SearchNode(const SearchNode&, bool forceNonTerminal, bool copySubtreeValueBias);
   ~SearchNode();
 

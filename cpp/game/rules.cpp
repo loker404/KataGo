@@ -7,6 +7,68 @@
 using namespace std;
 using json = nlohmann::json;
 
+//FlyingKnifeConfig implementation
+
+bool FlyingKnifeConfig::isEnabled() const {
+  return blackKnifeCount > 0 || blackSickleCount > 0 ||
+         whiteKnifeCount > 0 || whiteSickleCount > 0;
+}
+
+bool FlyingKnifeConfig::operator==(const FlyingKnifeConfig& other) const {
+  return triggerRangeStart == other.triggerRangeStart &&
+         triggerRangeEnd == other.triggerRangeEnd &&
+         blackKnifeCount == other.blackKnifeCount &&
+         blackSickleCount == other.blackSickleCount &&
+         whiteKnifeCount == other.whiteKnifeCount &&
+         whiteSickleCount == other.whiteSickleCount;
+}
+
+bool FlyingKnifeConfig::operator!=(const FlyingKnifeConfig& other) const {
+  return !(*this == other);
+}
+
+nlohmann::json FlyingKnifeConfig::toJson() const {
+  nlohmann::json j;
+  j["rangeStart"] = triggerRangeStart;
+  j["rangeEnd"] = triggerRangeEnd;
+  j["blackKnife"] = blackKnifeCount;
+  j["blackSickle"] = blackSickleCount;
+  j["whiteKnife"] = whiteKnifeCount;
+  j["whiteSickle"] = whiteSickleCount;
+  return j;
+}
+
+FlyingKnifeConfig FlyingKnifeConfig::fromJson(const nlohmann::json& j) {
+  FlyingKnifeConfig config;
+  if(j.contains("rangeStart")) config.triggerRangeStart = j["rangeStart"].get<int>();
+  if(j.contains("rangeEnd")) config.triggerRangeEnd = j["rangeEnd"].get<int>();
+  if(j.contains("blackKnife")) config.blackKnifeCount = j["blackKnife"].get<int>();
+  if(j.contains("blackSickle")) config.blackSickleCount = j["blackSickle"].get<int>();
+  if(j.contains("whiteKnife")) config.whiteKnifeCount = j["whiteKnife"].get<int>();
+  if(j.contains("whiteSickle")) config.whiteSickleCount = j["whiteSickle"].get<int>();
+
+  if(config.triggerRangeStart < 0)
+    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
+  if(config.triggerRangeEnd < config.triggerRangeStart)
+    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
+  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
+     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
+    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+
+  return config;
+}
+
+std::string FlyingKnifeConfig::toString() const {
+  if(!isEnabled()) return "none";
+  std::ostringstream out;
+  out << "range[" << triggerRangeStart << "," << triggerRangeEnd << "]"
+      << " B:" << blackKnifeCount << "k+" << blackSickleCount << "s"
+      << " W:" << whiteKnifeCount << "k+" << whiteSickleCount << "s";
+  return out.str();
+}
+
+//Rules implementation
+
 Rules::Rules() {
   //Defaults if not set - closest match to TT rules
   koRule = KO_POSITIONAL;
@@ -51,7 +113,8 @@ bool Rules::operator==(const Rules& other) const {
     hasButton == other.hasButton &&
     whiteHandicapBonusRule == other.whiteHandicapBonusRule &&
     friendlyPassOk == other.friendlyPassOk &&
-    komi == other.komi;
+    komi == other.komi &&
+    fkConfig == other.fkConfig;
 }
 
 bool Rules::operator!=(const Rules& other) const {
@@ -63,7 +126,8 @@ bool Rules::operator!=(const Rules& other) const {
     hasButton != other.hasButton ||
     whiteHandicapBonusRule != other.whiteHandicapBonusRule ||
     friendlyPassOk != other.friendlyPassOk ||
-    komi != other.komi;
+    komi != other.komi ||
+    fkConfig != other.fkConfig;
 }
 
 bool Rules::equalsIgnoringKomi(const Rules& other) const {
@@ -74,7 +138,8 @@ bool Rules::equalsIgnoringKomi(const Rules& other) const {
     multiStoneSuicideLegal == other.multiStoneSuicideLegal &&
     hasButton == other.hasButton &&
     whiteHandicapBonusRule == other.whiteHandicapBonusRule &&
-    friendlyPassOk == other.friendlyPassOk;
+    friendlyPassOk == other.friendlyPassOk &&
+    fkConfig == other.fkConfig;
 }
 
 bool Rules::gameResultWillBeInteger() const {
@@ -227,6 +292,8 @@ json Rules::toJsonHelper(bool omitKomi, bool omitDefaults) const {
     ret["friendlyPassOk"] = friendlyPassOk;
   if(!omitKomi)
     ret["komi"] = komi;
+  if(fkConfig.isEnabled())
+    ret["flyingKnife"] = fkConfig.toJson();
   return ret;
 }
 
@@ -413,6 +480,9 @@ static Rules parseRulesHelper(const string& sOrig, bool allowKomi) {
           komiSpecified = true;
           if(rules.komi < Rules::MIN_USER_KOMI || rules.komi > Rules::MAX_USER_KOMI || !Rules::komiIsIntOrHalfInt(rules.komi))
             throw IOError("Komi value is not a half-integer or is too extreme");
+        }
+        else if(key == "flyingKnife") {
+          rules.fkConfig = FlyingKnifeConfig::fromJson(iter.value());
         }
         else
           throw IOError("Unknown rules option: " + key);

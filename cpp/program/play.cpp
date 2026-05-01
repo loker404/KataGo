@@ -1679,7 +1679,14 @@ FinishedGameData* Play::runGame(
     int nextTurnIdx = (int)hist.moveHistory.size();
     maybeCheckForNewNNEval(nextTurnIdx);
 
-    pla = getOpp(pla);
+    //Flying knife: if no sequence is active, check if we should trigger a new ability
+    if(hist.rules.fkConfig.isEnabled() && !hist.fkState.isInSequence()) {
+      int moveNumber = (int)hist.moveHistory.size();
+      hist.checkAndActivateAbility(moveNumber, gameRand);
+    }
+
+    //Use presumedNextMovePla to handle flying knife sequences correctly
+    pla = hist.presumedNextMovePla;
   }
 
   gameData->endHist = hist;

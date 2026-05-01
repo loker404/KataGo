@@ -105,6 +105,33 @@ bool SearchChildPointer::compexweakEdgeVisits(int64_t& expected, int64_t desired
 SearchNode::SearchNode(Player pla, bool fnt, uint32_t mIdx, Hash128 gh)
   :nextPla(pla),
    forceNonTerminal(fnt),
+   isChanceNode(false),
+   chanceNodeProb(0.0f),
+   patternBonusHash(),
+   mutexIdx(mIdx),
+   state(SearchNode::STATE_UNEVALUATED),
+   nnOutput(),
+   humanOutput(),
+   nodeAge(0),
+   children0(NULL),
+   children1(NULL),
+   children2(NULL),
+   stats(),
+   virtualLosses(0),
+   lastSubtreeValueBiasDeltaSum(0.0),
+   lastSubtreeValueBiasWeight(0.0),
+   subtreeValueBiasTableEntry(),
+   graphHash(gh),
+   evalCacheEntry(nullptr),
+   dirtyCounter(0)
+{
+}
+
+SearchNode::SearchNode(Player pla, bool fnt, bool isCN, float cnp, uint32_t mIdx, Hash128 gh)
+  :nextPla(pla),
+   forceNonTerminal(fnt),
+   isChanceNode(isCN),
+   chanceNodeProb(cnp),
    patternBonusHash(),
    mutexIdx(mIdx),
    state(SearchNode::STATE_UNEVALUATED),
@@ -128,6 +155,8 @@ SearchNode::SearchNode(Player pla, bool fnt, uint32_t mIdx, Hash128 gh)
 SearchNode::SearchNode(const SearchNode& other, bool fnt, bool copySubtreeValueBias)
   :nextPla(other.nextPla),
    forceNonTerminal(fnt),
+   isChanceNode(other.isChanceNode),
+   chanceNodeProb(other.chanceNodeProb),
    patternBonusHash(other.patternBonusHash),
    mutexIdx(other.mutexIdx),
    state(other.state.load(std::memory_order_acquire)),

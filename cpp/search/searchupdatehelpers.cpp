@@ -188,7 +188,11 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
       continue;
 
     double childUtility = stats.stats.utilityAvg;
-    stats.selfUtility = node.nextPla == P_WHITE ? childUtility : -childUtility;
+    //Chance nodes don't flip utility - both children serve the same player's perspective
+    if(node.isChanceNode)
+      stats.selfUtility = childUtility;
+    else
+      stats.selfUtility = node.nextPla == P_WHITE ? childUtility : -childUtility;
     stats.weightAdjusted = stats.stats.getChildWeight(edgeVisits);
     stats.prevMoveLoc = moveLoc;
 
@@ -257,7 +261,8 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
   }
 
   //Also add in the direct evaluation of this node.
-  {
+  //Chance nodes have no NN output - they are pure routing nodes, so skip this section.
+  if(!node.isChanceNode) {
     const NNOutput* nnOutput = node.getNNOutput();
     assert(nnOutput != NULL);
     double winProb = (double)nnOutput->whiteWinProb;
@@ -319,6 +324,14 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
     weightSum += weight;
   }
 
+  //If no weight accumulated (e.g. chance node with no evaluated children), skip updating averages
+  if(weightSum <= 0.0) {
+    while(node.statsLock.test_and_set(std::memory_order_acquire));
+    node.stats.visits.fetch_add(numVisitsToAdd,std::memory_order_release);
+    node.statsLock.clear(std::memory_order_release);
+    return;
+  }
+
   double winLossValueAvg = winLossValueSum / weightSum;
   double noResultValueAvg = noResultValueSum / weightSum;
   double scoreMeanAvg = scoreMeanSum / weightSum;
@@ -328,7 +341,8 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
   double utilitySqAvg = utilitySqSum / weightSum;
 
   double oldUtilityAvg = utilityAvg;
-  utilityAvg += getPatternBonus(node.patternBonusHash,getOpp(node.nextPla));
+  if(!node.isChanceNode)
+    utilityAvg += getPatternBonus(node.patternBonusHash,getOpp(node.nextPla));
   //Note that root node does not use eval cache for its aggregate values
   if(searchParams.useEvalCache && searchParams.useGraphSearch && node.evalCacheEntry != nullptr && mirroringPla == C_EMPTY && (&node != rootNode) && !node.forceNonTerminal) {
     adjustEvalsFromCacheHelper(

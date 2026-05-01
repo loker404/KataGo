@@ -1,6 +1,7 @@
 #include "../search/search.h"
 
 #include "../search/searchnode.h"
+#include "../game/graphhash.h"
 
 //------------------------
 #include "../core/using.h"
@@ -640,4 +641,171 @@ void Search::selectBestChildToDescend(
     }
   }
 
+}
+
+bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
+  const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
+  if(!fkConfig.isEnabled())
+    return false;
+  //Already in a sequence, no chance node needed
+  if(thread.history.fkState.isInSequence())
+    return false;
+  //Not in trigger range
+  int moveNumber = (int)thread.history.moveHistory.size() + 1;
+  if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
+    return false;
+  //Check if current player has any remaining abilities
+  Player pla = thread.history.presumedNextMovePla;
+  int knives = thread.history.fkState.getKnivesRemaining(pla);
+  int sickles = thread.history.fkState.getSicklesRemaining(pla);
+  return (knives + sickles) > 0;
+}
+
+float Search::computeTriggerProbability(const SearchThread& thread) const {
+  const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
+  int moveNumber = (int)thread.history.moveHistory.size() + 1;
+  Player pla = thread.history.presumedNextMovePla;
+  int knives = thread.history.fkState.getKnivesRemaining(pla);
+  int sickles = thread.history.fkState.getSicklesRemaining(pla);
+  int totalAbilities = knives + sickles;
+  int remainingRange = fkConfig.triggerRangeEnd - moveNumber + 1;
+  return (float)totalAbilities / (float)(remainingRange + totalAbilities);
+}
+
+int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
+  Player pla = thread.history.presumedNextMovePla;
+  int knives = thread.history.fkState.getKnivesRemaining(pla);
+  int sickles = thread.history.fkState.getSicklesRemaining(pla);
+  int totalAbilities = knives + sickles;
+  double r = thread.rand.nextDouble();
+  if(r >= triggerProb) {
+    return 0; // No trigger
+  }
+  //Triggered - choose between knife and sickle using an independent random draw
+  if(knives == 0) return 2;
+  if(sickles == 0) return 1;
+  double knifeProb = (double)knives / (double)totalAbilities;
+  double r2 = thread.rand.nextDouble();
+  if(r2 < knifeProb) return 1;
+  return 2;
+}
+
+static void applyChanceOutcome(SearchThread& thread, int chanceChild, Player pla, Player childNextPla) {
+  thread.pla = childNextPla;
+  if(chanceChild == 1) {
+    thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getKnifeMoves();
+    thread.history.fkState.abilityOwner = pla;
+    thread.history.fkState.decrementKnives(pla);
+  } else if(chanceChild == 2) {
+    thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getSickleMoves();
+    thread.history.fkState.abilityOwner = pla;
+    thread.history.fkState.decrementSickles(pla);
+  }
+}
+
+bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot) {
+  float triggerProb = computeTriggerProbability(thread);
+  int chanceChild = selectChanceChild(thread, triggerProb);
+
+  //Determine number of children for this chance node: always child 0 (no-trigger), maybe child 1 (knife), maybe child 2 (sickle)
+  Player pla = thread.pla;
+  int knives = thread.history.fkState.getKnivesRemaining(pla);
+  int sickles = thread.history.fkState.getSicklesRemaining(pla);
+
+  int numChanceChildren = 1; // always have no-trigger
+  if(knives > 0) numChanceChildren++;
+  if(sickles > 0) numChanceChildren++;
+
+  //Ensure we have capacity for the children
+  bool suc = node.maybeExpandChildrenCapacityForNewChild(nodeState, numChanceChildren);
+  if(!suc) {
+    thread.shouldCountPlayout = false;
+    return false;
+  }
+
+  SearchNodeChildrenReference children = node.getChildren(nodeState);
+
+  //Determine the child's nextPla
+  Player childNextPla = (chanceChild == 0) ? getOpp(pla) : pla;
+
+  //Check if the selected child already exists
+  SearchNode* child = children[chanceChild].getIfAllocated();
+  if(child != NULL) {
+    //Child exists, just descend into it
+    child->virtualLosses.fetch_add(1, std::memory_order_release);
+
+    //Save thread state, apply chance outcome, recompute graph hash
+    BoardHistory savedHistory = thread.history;
+    Hash128 savedGraphHash = thread.graphHash;
+    Player savedPla = thread.pla;
+    applyChanceOutcome(thread, chanceChild, pla, childNextPla);
+    if(searchParams.useGraphSearch)
+      thread.graphHash = GraphHash::getGraphHash(
+        thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+      );
+
+    //Recurse
+    bool shouldUpdateChildAncestors = playoutDescend(thread, *child, false);
+    if(shouldUpdateChildAncestors) {
+      nodeState = node.state.load(std::memory_order_acquire);
+      SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
+      childrenRef[chanceChild].addEdgeVisits(1);
+      updateStatsAfterPlayout(node, thread, isRoot);
+    }
+    child->virtualLosses.fetch_add(-1, std::memory_order_release);
+
+    //Restore thread state
+    thread.history = savedHistory;
+    thread.graphHash = savedGraphHash;
+    thread.pla = savedPla;
+
+    return shouldUpdateChildAncestors;
+  }
+
+  //Need to create a new child node
+  //Save thread state, apply chance outcome, recompute graph hash
+  BoardHistory savedHistory = thread.history;
+  Hash128 savedGraphHash = thread.graphHash;
+  Player savedPla = thread.pla;
+  applyChanceOutcome(thread, chanceChild, pla, childNextPla);
+  if(searchParams.useGraphSearch)
+    thread.graphHash = GraphHash::getGraphHash(
+      thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+    );
+
+  child = allocateOrFindNode(thread, childNextPla, Board::NULL_LOC, false, thread.graphHash);
+  child->virtualLosses.fetch_add(1, std::memory_order_release);
+
+  {
+    std::lock_guard<std::mutex> lock(mutexPool->getMutex(node.mutexIdx));
+    SearchNode* existingChild = children[chanceChild].getIfAllocated();
+    if(existingChild == NULL) {
+      children[chanceChild].setMoveLocRelaxed(Board::NULL_LOC);
+      children[chanceChild].store(child);
+    } else {
+      child->virtualLosses.fetch_add(-1, std::memory_order_release);
+      thread.shouldCountPlayout = false;
+      thread.history = savedHistory;
+      thread.graphHash = savedGraphHash;
+      thread.pla = savedPla;
+      return false;
+    }
+  }
+
+  //Recurse into the new child
+  bool shouldUpdateChildAncestors = playoutDescend(thread, *child, false);
+  if(shouldUpdateChildAncestors) {
+    nodeState = node.state.load(std::memory_order_acquire);
+    SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
+    childrenRef[chanceChild].addEdgeVisits(1);
+    updateStatsAfterPlayout(node, thread, isRoot);
+  }
+  child->virtualLosses.fetch_add(-1, std::memory_order_release);
+
+  //Restore thread state
+  thread.history = savedHistory;
+  thread.graphHash = savedGraphHash;
+  thread.pla = savedPla;
+
+  return shouldUpdateChildAncestors;
 }

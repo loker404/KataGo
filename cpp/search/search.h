@@ -598,6 +598,11 @@ private:
     bool isRoot
   ) const;
 
+  bool shouldInsertChanceNode(const SearchThread& thread) const;
+  float computeTriggerProbability(const SearchThread& thread) const;
+  int selectChanceChild(SearchThread& thread, float triggerProb) const;
+  bool handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot);
+
   //----------------------------------------------------------------------------------------
   // Update of node values during search
   // searchupdatehelpers.cpp
@@ -648,7 +653,7 @@ private:
   // search.cpp
   //----------------------------------------------------------------------------------------
   uint32_t createMutexIdxForNode(SearchThread& thread) const;
-  SearchNode* allocateOrFindNode(SearchThread& thread, Player nextPla, Loc bestChildMoveLoc, bool forceNonTerminal, Hash128 graphHash);
+  SearchNode* allocateOrFindNode(SearchThread& thread, Player nextPla, Loc bestChildMoveLoc, bool forceNonTerminal, Hash128 graphHash, bool isChanceNode = false, float chanceNodeProb = 0.0f);
   void clearOldNNOutputs();
   void transferOldNNOutputs(SearchThread& thread);
   void removeSubtreeValueBias(SearchNode* node);

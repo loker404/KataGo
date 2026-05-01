@@ -3,10 +3,42 @@
 
 #include "../core/global.h"
 #include "../core/hash.h"
+#include "../core/rand.h"
 #include "../game/board.h"
 #include "../game/rules.h"
 
 struct KoHashTable;
+
+struct FlyingKnifeState {
+  int blackKnivesRemaining = 0;
+  int blackSicklesRemaining = 0;
+  int whiteKnivesRemaining = 0;
+  int whiteSicklesRemaining = 0;
+
+  int remainingMovesInSequence = 0;
+  Player abilityOwner = C_EMPTY;
+
+  bool isInSequence() const { return remainingMovesInSequence > 0; }
+
+  int getKnivesRemaining(Player pla) const { return pla == P_BLACK ? blackKnivesRemaining : whiteKnivesRemaining; }
+  int getSicklesRemaining(Player pla) const { return pla == P_BLACK ? blackSicklesRemaining : whiteSicklesRemaining; }
+  void decrementKnives(Player pla) { if(pla == P_BLACK) blackKnivesRemaining--; else whiteKnivesRemaining--; }
+  void decrementSickles(Player pla) { if(pla == P_BLACK) blackSicklesRemaining--; else whiteSicklesRemaining--; }
+
+  bool operator==(const FlyingKnifeState& other) const {
+    return blackKnivesRemaining == other.blackKnivesRemaining &&
+           blackSicklesRemaining == other.blackSicklesRemaining &&
+           whiteKnivesRemaining == other.whiteKnivesRemaining &&
+           whiteSicklesRemaining == other.whiteSicklesRemaining &&
+           remainingMovesInSequence == other.remainingMovesInSequence &&
+           abilityOwner == other.abilityOwner;
+  }
+  bool operator!=(const FlyingKnifeState& other) const { return !(*this == other); }
+
+  static constexpr int MAX_FK_SEQUENCE_MOVES = 3;
+  static const Hash128 ZOBRIST_FK_REMAINING_MOVES[MAX_FK_SEQUENCE_MOVES + 1];
+  static const Hash128 ZOBRIST_FK_ABILITY_OWNER[3];
+};
 
 //A data structure enabling checking of move legality, including optionally superko,
 //and implements scoring and support for various rulesets (see rules.h)
@@ -89,6 +121,9 @@ struct BoardHistory {
 
   //Is the game supposed to be ended now?
   bool isGameFinished;
+
+  //Flying knife state
+  FlyingKnifeState fkState;
   //Winner of the game if the game is supposed to have ended now, C_EMPTY if it is a draw or isNoResult.
   Player winner;
   //Score difference of the game if the game is supposed to have ended now, does NOT take into account whiteKomiAdjustmentForDrawUtility
@@ -120,6 +155,13 @@ struct BoardHistory {
   void setInitialTurnNumber(int64_t n);
   //Set assumeMultipleStartingBlackMovesAreHandicap and update bonus points accordingly
   void setAssumeMultipleStartingBlackMovesAreHandicap(bool b);
+
+  //Initialize flying knife state from the rules config
+  void initFlyingKnifeState();
+  //Check and possibly activate a flying knife/sickle ability after a move.
+  //Returns: 0=none, 2=knife activated, 3=sickle activated.
+  //moveNumber is the current move count (number of moves already played).
+  int checkAndActivateAbility(int moveNumber, Rand& rand);
   //Set overrideNumHandicapStones and update bonus points accordingly
   void setOverrideNumHandicapStones(int n);
 

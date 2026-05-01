@@ -6,6 +6,26 @@
 
 #include "../external/nlohmann_json/json.hpp"
 
+struct FlyingKnifeConfig {
+  int triggerRangeStart = 11;
+  int triggerRangeEnd = 50;
+  int blackKnifeCount = 0;
+  int blackSickleCount = 0;
+  int whiteKnifeCount = 0;
+  int whiteSickleCount = 0;
+
+  bool isEnabled() const;
+  static int getKnifeMoves() { return 2; }
+  static int getSickleMoves() { return 3; }
+
+  nlohmann::json toJson() const;
+  static FlyingKnifeConfig fromJson(const nlohmann::json& j);
+  std::string toString() const;
+
+  bool operator==(const FlyingKnifeConfig& other) const;
+  bool operator!=(const FlyingKnifeConfig& other) const;
+};
+
 struct Rules {
 
   static const int KO_SIMPLE = 0;
@@ -37,6 +57,9 @@ struct Rules {
   bool friendlyPassOk;
 
   float komi;
+
+  FlyingKnifeConfig fkConfig;
+
   //Min and max acceptable komi in various places involving user input validation
   static constexpr float MIN_USER_KOMI = -150.0f;
   static constexpr float MAX_USER_KOMI = 150.0f;

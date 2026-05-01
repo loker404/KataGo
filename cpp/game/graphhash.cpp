@@ -1,4 +1,5 @@
 #include "../game/graphhash.h"
+#include <algorithm>
 #include "../core/test.h"
 
 Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite) {
@@ -18,6 +19,14 @@ Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, dou
   static constexpr uint64_t CONSECPASS_MULT1 = 3202034522624059733ULL;
   hash.hash0 += CONSECPASS_MULT0 * (uint64_t)hist.consecutiveEndingPasses;
   hash.hash1 += CONSECPASS_MULT1 * (uint64_t)hist.consecutiveEndingPasses;
+
+  // Fold in flying knife state for position uniqueness
+  if(hist.rules.fkConfig.isEnabled()) {
+    hash ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(hist.fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
+    testAssert(hist.fkState.abilityOwner >= 0 && hist.fkState.abilityOwner <= 2);
+    hash ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[hist.fkState.abilityOwner];
+  }
+
   return hash;
 }
 

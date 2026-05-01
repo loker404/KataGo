@@ -46,6 +46,10 @@ static const vector<string> knownCommands = {
   "kata-set-rule",
   "kata-set-rules",
 
+  //GTP extension - flying knife rules
+  "kata-get-flying-knife",
+  "kata-set-flying-knife",
+
   //Get or change a few limited params dynamically
   "kata-get-models",
   "kata-get-param",
@@ -1028,7 +1032,6 @@ struct GTPEngine {
     bool responseIsError = false;
     Loc moveLocToPlay = Board::NULL_LOC;
     handleGenMoveResult(pla,bot->getSearchStopAndWait(),logger,gargs,args,genmoveMoveLoc,response,responseIsError,moveLocToPlay);
-    printGTPResponse(response,responseIsError);
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
       if(suc)
@@ -1043,7 +1046,25 @@ struct GTPEngine {
         Global::fatalError(sout.str());
       }
 
+      //Check for flying knife trigger after the move
+      Search* search = bot->getSearchStopAndWait();
+      BoardHistory& hist = search->rootHistory;
+      if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
+        int moveNumber = (int)hist.moveHistory.size();
+        if(!hist.fkState.isInSequence()) {
+          int abilityType = hist.checkAndActivateAbility(moveNumber, gtpRand);
+          if(abilityType > 0) {
+            response += " # flying_knife " + Global::intToString(abilityType);
+            logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
+          }
+        }
+      }
+
+      printGTPResponse(response,responseIsError);
       maybeStartPondering = true;
+    }
+    else {
+      printGTPResponse(response,responseIsError);
     }
   }
 
@@ -2423,6 +2444,74 @@ int MainCmds::gtp(const vector<string>& args) {
           logger.write("Changed rules to " + newRules.toStringNoKomiMaybeNice());
           if(!logger.isLoggingToStderr())
             cerr << "Changed rules to " + newRules.toStringNoKomiMaybeNice() << endl;
+        }
+      }
+    }
+
+    else if(command == "kata-get-flying-knife") {
+      if(pieces.size() != 0) {
+        response = "Expected no arguments for kata-get-flying-knife but got '" + Global::concat(pieces," ") + "'";
+      }
+      else {
+        response = engine->getCurrentRules().fkConfig.toJson().dump();
+      }
+    }
+
+    else if(command == "kata-set-flying-knife") {
+      //Parse key-value pairs from pieces
+      if(pieces.size() % 2 != 0) {
+        responseIsError = true;
+        response = "Expected even number of arguments (key-value pairs) for kata-set-flying-knife";
+      }
+      else {
+        try {
+          FlyingKnifeConfig fkConfig = engine->getCurrentRules().fkConfig;
+          for(size_t i = 0; i < pieces.size(); i += 2) {
+            string key = pieces[i];
+            string value = pieces[i+1];
+            int val = Global::stringToInt(value);
+            if(key == "rangeStart") fkConfig.triggerRangeStart = val;
+            else if(key == "rangeEnd") fkConfig.triggerRangeEnd = val;
+            else if(key == "blackKnife") fkConfig.blackKnifeCount = val;
+            else if(key == "blackSickle") fkConfig.blackSickleCount = val;
+            else if(key == "whiteKnife") fkConfig.whiteKnifeCount = val;
+            else if(key == "whiteSickle") fkConfig.whiteSickleCount = val;
+            else {
+              responseIsError = true;
+              response = "Unknown flying knife parameter: " + key;
+              break;
+            }
+          }
+          if(!responseIsError) {
+            if(fkConfig.triggerRangeStart < 0) {
+              responseIsError = true;
+              response = "rangeStart must be >= 0";
+            } else if(fkConfig.triggerRangeEnd < fkConfig.triggerRangeStart) {
+              responseIsError = true;
+              response = "rangeEnd must be >= rangeStart";
+            } else if(fkConfig.blackKnifeCount < 0 || fkConfig.blackSickleCount < 0 ||
+                      fkConfig.whiteKnifeCount < 0 || fkConfig.whiteSickleCount < 0) {
+              responseIsError = true;
+              response = "Ability counts must be >= 0";
+            }
+          }
+          if(!responseIsError) {
+            Rules newRules = engine->getCurrentRules();
+            newRules.fkConfig = fkConfig;
+            string error;
+            bool suc = engine->setRulesNotIncludingKomi(newRules, error);
+            if(!suc) {
+              responseIsError = true;
+              response = error;
+            } else {
+              response = fkConfig.toJson().dump();
+              logger.write("Changed flying knife config to " + fkConfig.toString());
+            }
+          }
+        }
+        catch(const StringError& err) {
+          responseIsError = true;
+          response = "Error parsing flying knife parameters: " + string(err.what());
         }
       }
     }

@@ -331,9 +331,15 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   float oldWhiteHandicapBonusScore = rootHistory.whiteHandicapBonusScore;
 
   //Compute these first so we can know if we need to set forceNonTerminal below.
+  FlyingKnifeState fkStateBefore = rootHistory.fkState;
   rootHistory.makeBoardMoveAssumeLegal(rootBoard,moveLoc,rootPla,rootKoHashTable,preventEncore);
-  rootPla = getOpp(rootPla);
+  rootPla = rootHistory.presumedNextMovePla;
   rootKoHashTable->recompute(rootHistory);
+
+  //If flying knife state changed after the move (e.g. sequence ended),
+  //the tree structure may be invalidated. Clear the search to rebuild from the new state.
+  if(rootHistory.rules.fkConfig.isEnabled() && rootHistory.fkState != fkStateBefore)
+    clearSearch();
 
   if(rootNode != NULL) {
     SearchNode* child = NULL;
@@ -832,7 +838,7 @@ uint32_t Search::createMutexIdxForNode(SearchThread& thread) const {
 static const Hash128 FORCE_NON_TERMINAL_HASH = Hash128(0xd4c31800cb8809e2ULL,0xf75f9d2083f2ffcaULL);
 
 //Must be called AFTER making the bestChildMoveLoc in the thread board and hist.
-SearchNode* Search::allocateOrFindNode(SearchThread& thread, Player nextPla, Loc bestChildMoveLoc, bool forceNonTerminal, Hash128 graphHash) {
+SearchNode* Search::allocateOrFindNode(SearchThread& thread, Player nextPla, Loc bestChildMoveLoc, bool forceNonTerminal, Hash128 graphHash, bool isChanceNode, float chanceNodeProb) {
   //Hash to use as a unique id for this node in the table, for transposition detection.
   //If this collides, we will be sad, but it should be astronomically rare since our hash is 128 bits.
   Hash128 childHash;
@@ -864,7 +870,7 @@ SearchNode* Search::allocateOrFindNode(SearchThread& thread, Player nextPla, Loc
       child = insertLoc->second;
     }
     else {
-      child = new SearchNode(nextPla, forceNonTerminal, createMutexIdxForNode(thread), graphHash);
+      child = new SearchNode(nextPla, forceNonTerminal, isChanceNode, chanceNodeProb, createMutexIdxForNode(thread), graphHash);
 
       //Also perform subtree value bias and pattern bonus handling under the mutex. These parameters are no atomic, so
       //if the node is accessed concurrently by other nodes through the table, we need to make sure these parameters are fully
@@ -995,7 +1001,8 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
     }
 
     //If this node has children, it MUST also have an nnOutput.
-    if(foundAnyChildren) {
+    //Chance nodes are an exception - they have children but no NN output.
+    if(foundAnyChildren && !node->isChanceNode) {
       NNOutput* nnOutput = node->getNNOutput();
       (void)nnOutput; //avoid warning when we have no asserts
       assert(nnOutput != NULL);
@@ -1185,6 +1192,17 @@ bool Search::playoutDescend(
 
   SearchNodeState nodeState = node.state.load(std::memory_order_acquire);
   if(nodeState == SearchNode::STATE_UNEVALUATED) {
+    //Chance nodes skip NN evaluation - they are pure routing nodes
+    if(node.isChanceNode) {
+      bool suc = node.state.compare_exchange_strong(nodeState, SearchNode::STATE_EVALUATING, std::memory_order_seq_cst);
+      if(!suc) {
+        thread.shouldCountPlayout = false;
+        return false;
+      }
+      node.initializeChildren();
+      node.state.store(SearchNode::STATE_EXPANDED0, std::memory_order_seq_cst);
+      return true;
+    }
     //Always attempt to set a new nnOutput. That way, if some GPU is slow and malfunctioning, we don't get blocked by it.
     {
       bool suc = initNodeNNOutput(thread,node,isRoot,false,false);
@@ -1217,7 +1235,14 @@ bool Search::playoutDescend(
   }
 
   assert(nodeState >= SearchNode::STATE_EXPANDED0);
-  maybeRecomputeExistingNNOutput(thread,node,isRoot);
+  //Chance nodes don't have NN output to recompute
+  if(!node.isChanceNode)
+    maybeRecomputeExistingNNOutput(thread,node,isRoot);
+
+  //Chance nodes use probability sampling instead of PUCT selection
+  if(node.isChanceNode) {
+    return handleChanceNodeDescend(thread, node, nodeState, isRoot);
+  }
 
   //Find the best child to descend down
   int numChildrenFound;
@@ -1309,7 +1334,7 @@ bool Search::playoutDescend(
 
       //Make the move! We need to make the move before we create the node so we can see the new state and get the right graphHash.
       thread.history.makeBoardMoveAssumeLegal(thread.board,bestChildMoveLoc,thread.pla,rootKoHashTable);
-      thread.pla = getOpp(thread.pla);
+      thread.pla = thread.history.presumedNextMovePla;
       if(searchParams.useGraphSearch)
         thread.graphHash = GraphHash::getGraphHash(
           thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
@@ -1321,6 +1346,44 @@ bool Search::playoutDescend(
         (searchParams.conservativePass && (&node == rootNode)) ||
         canForceNonTerminalDueToFriendlyPass
       );
+
+      //Check if we should insert a chance node for flying knife trigger
+      if(shouldInsertChanceNode(thread)) {
+        //The chance node's nextPla is the player who just made the move (before the turn flip)
+        Player chancePla = getOpp(thread.pla);
+        //Create the chance node as an intermediate node between current node and child
+        float triggerProb = computeTriggerProbability(thread);
+        SearchNode* chanceNode = allocateOrFindNode(thread, chancePla, bestChildMoveLoc, forceNonTerminal, thread.graphHash, true, triggerProb);
+        chanceNode->virtualLosses.fetch_add(1,std::memory_order_release);
+
+        {
+          std::lock_guard<std::mutex> lock(mutexPool->getMutex(node.mutexIdx));
+          SearchNode* existingChild = children[bestChildIdx].getIfAllocated();
+          if(existingChild == NULL) {
+            SearchChildPointer& childPointer = children[bestChildIdx];
+            childPointer.setMoveLocRelaxed(bestChildMoveLoc);
+            childPointer.store(chanceNode);
+          }
+          else {
+            chanceNode->virtualLosses.fetch_add(-1,std::memory_order_release);
+            thread.shouldCountPlayout = false;
+            return false;
+          }
+        }
+
+        //Route through the chance node to create actual game state children
+        thread.graphPath.insert(chanceNode);
+        bool shouldUpdateAncestors = handleChanceNodeDescend(thread, *chanceNode, SearchNode::STATE_EXPANDED0, false);
+        if(shouldUpdateAncestors) {
+          nodeState = node.state.load(std::memory_order_acquire);
+          SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
+          childrenRef[bestChildIdx].addEdgeVisits(1);
+          updateStatsAfterPlayout(node,thread,isRoot);
+        }
+        chanceNode->virtualLosses.fetch_add(-1,std::memory_order_release);
+        return shouldUpdateAncestors;
+      }
+
       child = allocateOrFindNode(thread, thread.pla, bestChildMoveLoc, forceNonTerminal, thread.graphHash);
       child->virtualLosses.fetch_add(1,std::memory_order_release);
 
@@ -1362,6 +1425,20 @@ bool Search::playoutDescend(
 
       child->virtualLosses.fetch_add(1,std::memory_order_release);
 
+      //If the existing child is a chance node, route through it instead of making a board move
+      if(child->isChanceNode) {
+        thread.graphPath.insert(child);
+        bool shouldUpdateAncestors = handleChanceNodeDescend(thread, *child, child->state.load(std::memory_order_acquire), false);
+        if(shouldUpdateAncestors) {
+          nodeState = node.state.load(std::memory_order_acquire);
+          SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
+          childrenRef[bestChildIdx].addEdgeVisits(1);
+          updateStatsAfterPlayout(node,thread,isRoot);
+        }
+        child->virtualLosses.fetch_add(-1,std::memory_order_release);
+        return shouldUpdateAncestors;
+      }
+
       //If edge visits is too much smaller than the child's visits, we can avoid descending.
       //Instead just add edge visits and treat that as a visit.
       //If we're not counting edge visits, then we're deliberately trying to add child visits beyond edge visits, don't return early
@@ -1373,7 +1450,7 @@ bool Search::playoutDescend(
 
       //Make the move!
       thread.history.makeBoardMoveAssumeLegal(thread.board,bestChildMoveLoc,thread.pla,rootKoHashTable);
-      thread.pla = getOpp(thread.pla);
+      thread.pla = thread.history.presumedNextMovePla;
       if(searchParams.useGraphSearch)
         thread.graphHash = GraphHash::getGraphHash(
           thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
