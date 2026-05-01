@@ -1043,6 +1043,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   //Determine the next player: during a flying knife sequence, the same player continues
   Player nextPlaAfterMove;
   if(fkState.isInSequence()) {
+    assert(fkState.remainingMovesInSequence > 0);
     fkState.remainingMovesInSequence--;
     nextPlaAfterMove = movePla;  // Same player continues
   } else {
@@ -1055,6 +1056,15 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
     testAssert(fkState.abilityOwner >= 0 && fkState.abilityOwner <= 2);
     koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[fkState.abilityOwner];
+    //Mix in per-player ability counts so positions with different remaining abilities have distinct ko hashes
+    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT0 * (uint64_t)fkState.blackKnivesRemaining;
+    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT1 * (uint64_t)fkState.blackKnivesRemaining;
+    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT0 * (uint64_t)fkState.whiteKnivesRemaining;
+    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT1 * (uint64_t)fkState.whiteKnivesRemaining;
+    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT0 * (uint64_t)fkState.blackSicklesRemaining;
+    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 * (uint64_t)fkState.blackSicklesRemaining;
+    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 * (uint64_t)fkState.whiteSicklesRemaining;
+    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)fkState.whiteSicklesRemaining;
   }
   koHashHistory.push_back(koHashAfterThisMove);
   moveHistory.emplace_back(moveLoc,movePla);
@@ -1375,10 +1385,14 @@ const Hash128 FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[3] = {
   Hash128(0x2730eeef8986428dULL, 0xffbec9da27b29eb2ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[2]"
 };
 
-const uint64_t FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT0 = 0x4a2e83f17b5d9c6aULL;
-const uint64_t FlyingKnifeState::ZOBRIST_FK_KNIVES_MULT1 = 0x7e1d483a9f26c5b0ULL;
-const uint64_t FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT0 = 0xd385f62e14a79b0cULL;
-const uint64_t FlyingKnifeState::ZOBRIST_FK_SICKLES_MULT1 = 0x29c4b7e86f31d5a0ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT0 = 0x4a2e83f17b5d9c6aULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT1 = 0x7e1d483a9f26c5b0ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT0 = 0xb5c1f8a32d7e0941ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT1 = 0xe3a72d5c19f84b60ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT0 = 0xd385f62e14a79b0cULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 = 0x29c4b7e86f31d5a0ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 = 0x8f41c5a7d23e6b90ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 = 0x1a6e9d3b5c8f0742ULL;
 
 //Flying knife initialization and trigger methods
 

@@ -728,16 +728,17 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   //Determine the child's nextPla
   Player childNextPla = (chanceChild == 0) ? getOpp(pla) : pla;
 
+  //Save only the lightweight fields that applyChanceOutcome modifies
+  FlyingKnifeState savedFkState = thread.history.fkState;
+  Hash128 savedGraphHash = thread.graphHash;
+  Player savedPla = thread.pla;
+
   //Check if the selected child already exists
   SearchNode* child = children[chanceChild].getIfAllocated();
   if(child != NULL) {
     //Child exists, just descend into it
     child->virtualLosses.fetch_add(1, std::memory_order_release);
 
-    //Save thread state, apply chance outcome, recompute graph hash
-    BoardHistory savedHistory = thread.history;
-    Hash128 savedGraphHash = thread.graphHash;
-    Player savedPla = thread.pla;
     applyChanceOutcome(thread, chanceChild, pla, childNextPla);
     if(searchParams.useGraphSearch)
       thread.graphHash = GraphHash::getGraphHash(
@@ -757,7 +758,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     child->virtualLosses.fetch_add(-1, std::memory_order_release);
 
     //Restore thread state
-    thread.history = savedHistory;
+    thread.history.fkState = savedFkState;
     thread.graphHash = savedGraphHash;
     thread.pla = savedPla;
 
@@ -765,17 +766,13 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   }
 
   //Need to create a new child node
-  //Save thread state, apply chance outcome, recompute graph hash
-  BoardHistory savedHistory = thread.history;
-  Hash128 savedGraphHash = thread.graphHash;
-  Player savedPla = thread.pla;
   applyChanceOutcome(thread, chanceChild, pla, childNextPla);
   if(searchParams.useGraphSearch)
     thread.graphHash = GraphHash::getGraphHash(
       thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
     );
 
-  child = allocateOrFindNode(thread, childNextPla, Board::NULL_LOC, false, thread.graphHash);
+  child = allocateOrFindNode(thread, childNextPla, Board::NULL_LOC, node.forceNonTerminal, thread.graphHash);
   child->virtualLosses.fetch_add(1, std::memory_order_release);
 
   {
@@ -787,7 +784,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     } else {
       child->virtualLosses.fetch_add(-1, std::memory_order_release);
       thread.shouldCountPlayout = false;
-      thread.history = savedHistory;
+      thread.history.fkState = savedFkState;
       thread.graphHash = savedGraphHash;
       thread.pla = savedPla;
       return false;
@@ -807,7 +804,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   child->virtualLosses.fetch_add(-1, std::memory_order_release);
 
   //Restore thread state
-  thread.history = savedHistory;
+  thread.history.fkState = savedFkState;
   thread.graphHash = savedGraphHash;
   thread.pla = savedPla;
 

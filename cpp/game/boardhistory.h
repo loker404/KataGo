@@ -38,10 +38,14 @@ struct FlyingKnifeState {
   static constexpr int MAX_FK_SEQUENCE_MOVES = 3;
   static const Hash128 ZOBRIST_FK_REMAINING_MOVES[MAX_FK_SEQUENCE_MOVES + 1];
   static const Hash128 ZOBRIST_FK_ABILITY_OWNER[3];
-  static const uint64_t ZOBRIST_FK_KNIVES_MULT0;
-  static const uint64_t ZOBRIST_FK_KNIVES_MULT1;
-  static const uint64_t ZOBRIST_FK_SICKLES_MULT0;
-  static const uint64_t ZOBRIST_FK_SICKLES_MULT1;
+  static const uint64_t ZOBRIST_FK_BLACK_KNIVES_MULT0;
+  static const uint64_t ZOBRIST_FK_BLACK_KNIVES_MULT1;
+  static const uint64_t ZOBRIST_FK_WHITE_KNIVES_MULT0;
+  static const uint64_t ZOBRIST_FK_WHITE_KNIVES_MULT1;
+  static const uint64_t ZOBRIST_FK_BLACK_SICKLES_MULT0;
+  static const uint64_t ZOBRIST_FK_BLACK_SICKLES_MULT1;
+  static const uint64_t ZOBRIST_FK_WHITE_SICKLES_MULT0;
+  static const uint64_t ZOBRIST_FK_WHITE_SICKLES_MULT1;
 };
 
 //A data structure enabling checking of move legality, including optionally superko,
