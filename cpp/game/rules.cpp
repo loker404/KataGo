@@ -42,7 +42,20 @@ FlyingKnifeConfig FlyingKnifeConfig::fromString(const std::string& sOrig) {
   FlyingKnifeConfig config;
   string s = Global::trim(sOrig);
 
-  vector<string> pairs = Global::split(s, ',');
+  vector<string> pairs;
+  {
+    string current;
+    for(char c : s) {
+      if(c == ',' || c == ';') {
+        pairs.push_back(current);
+        current.clear();
+      }
+      else {
+        current += c;
+      }
+    }
+    pairs.push_back(current);
+  }
 
   for(const string& pair : pairs) {
     string trimmedPair = Global::trim(pair);
@@ -712,4 +725,3 @@ const Hash128 Rules::ZOBRIST_BUTTON_HASH =   //Based on sha256 hash of Rules::ZO
 
 const Hash128 Rules::ZOBRIST_FRIENDLY_PASS_OK_HASH =   //Based on sha256 hash of Rules::ZOBRIST_FRIENDLY_PASS_OK_HASH
   Hash128(0x0113655998ef0a25ULL, 0x99c9d04ecd964874ULL);
-
