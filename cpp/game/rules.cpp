@@ -38,42 +38,11 @@ nlohmann::json FlyingKnifeConfig::toJson() const {
   return j;
 }
 
-FlyingKnifeConfig FlyingKnifeConfig::fromJson(const nlohmann::json& j) {
-  FlyingKnifeConfig config;
-  if(j.contains("rangeStart")) config.triggerRangeStart = j["rangeStart"].get<int>();
-  if(j.contains("rangeEnd")) config.triggerRangeEnd = j["rangeEnd"].get<int>();
-  if(j.contains("blackKnife")) config.blackKnifeCount = j["blackKnife"].get<int>();
-  if(j.contains("blackSickle")) config.blackSickleCount = j["blackSickle"].get<int>();
-  if(j.contains("whiteKnife")) config.whiteKnifeCount = j["whiteKnife"].get<int>();
-  if(j.contains("whiteSickle")) config.whiteSickleCount = j["whiteSickle"].get<int>();
-
-  if(config.triggerRangeStart < 0)
-    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
-  if(config.triggerRangeEnd < config.triggerRangeStart)
-    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
-  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
-     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
-    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
-
-  return config;
-}
-
 FlyingKnifeConfig FlyingKnifeConfig::fromString(const std::string& sOrig) {
   FlyingKnifeConfig config;
   string s = Global::trim(sOrig);
 
-  // If it starts with '{', parse as JSON
-  if(s.length() > 0 && s[0] == '{') {
-    json j = json::parse(s);
-    return FlyingKnifeConfig::fromJson(j);
-  }
-
-  // Otherwise parse as simple key-value pairs
-  vector<string> pairs;
-  if(s.find(';') != string::npos)
-    pairs = Global::split(s, ';');
-  else
-    pairs = Global::split(s, ',');
+  vector<string> pairs = Global::split(s, ',');
 
   for(const string& pair : pairs) {
     string trimmedPair = Global::trim(pair);
@@ -539,12 +508,6 @@ static Rules parseRulesHelper(const string& sOrig, bool allowKomi) {
           komiSpecified = true;
           if(rules.komi < Rules::MIN_USER_KOMI || rules.komi > Rules::MAX_USER_KOMI || !Rules::komiIsIntOrHalfInt(rules.komi))
             throw IOError("Komi value is not a half-integer or is too extreme");
-        }
-        else if(key == "flyingKnife") {
-          if(iter.value().is_string())
-            rules.fkConfig = FlyingKnifeConfig::fromString(iter.value().get<string>());
-          else
-            rules.fkConfig = FlyingKnifeConfig::fromJson(iter.value());
         }
         else
           throw IOError("Unknown rules option: " + key);

@@ -426,58 +426,7 @@ void ConfigParser::overrideKeys(const map<string, string>& newkvs, const vector<
 
 map<string,string> ConfigParser::parseCommaSeparated(const string& commaSeparatedValues) {
   map<string,string> keyValues;
-
-  // Parse comma-separated values, but skip commas inside {}, [], or quotes
-  vector<string> pieces;
-  string current;
-  int braceDepth = 0;
-  int bracketDepth = 0;
-  bool inQuote = false;
-  char quoteChar = '\0';
-
-  for(size_t i = 0; i < commaSeparatedValues.size(); i++) {
-    char c = commaSeparatedValues[i];
-
-    if(inQuote) {
-      current += c;
-      if(c == quoteChar) {
-        inQuote = false;
-        quoteChar = '\0';
-      }
-      else if(c == '\\' && i+1 < commaSeparatedValues.size()) {
-        // Handle escape sequences in quotes
-        current += commaSeparatedValues[i+1];
-        i++;
-      }
-    }
-    else {
-      if(c == '{' || c == '[') {
-        if(c == '{') braceDepth++;
-        else bracketDepth++;
-        current += c;
-      }
-      else if(c == '}' || c == ']') {
-        if(c == '}') braceDepth--;
-        else bracketDepth--;
-        current += c;
-      }
-      else if(c == '"' || c == '\'') {
-        inQuote = true;
-        quoteChar = c;
-        current += c;
-      }
-      else if(c == ',' && braceDepth == 0 && bracketDepth == 0) {
-        // Only split on comma at top level
-        pieces.push_back(current);
-        current.clear();
-      }
-      else {
-        current += c;
-      }
-    }
-  }
-  if(current.length() > 0)
-    pieces.push_back(current);
+  vector<string> pieces = Global::split(commaSeparatedValues,',');
 
   for(size_t i = 0; i<pieces.size(); i++) {
     string s = Global::trim(pieces[i]);

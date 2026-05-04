@@ -19,7 +19,6 @@ struct FlyingKnifeConfig {
   static int getSickleMoves() { return 3; }
 
   nlohmann::json toJson() const;
-  static FlyingKnifeConfig fromJson(const nlohmann::json& j);
   static FlyingKnifeConfig fromString(const std::string& s);
   std::string toString() const;
 

@@ -134,7 +134,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   flyingKnifeEnabledRate = cfg.contains("flyingKnifeEnabledRate") ? cfg.getDouble("flyingKnifeEnabledRate",0.0,1.0) : 0.0;
   if(cfg.contains("flyingKnife")) {
     string fkStr = cfg.getString("flyingKnife");
-    flyingKnifeConfig = FlyingKnifeConfig::fromJson(nlohmann::json::parse(fkStr));
+    flyingKnifeConfig = FlyingKnifeConfig::fromString(fkStr);
   }
 
   if(cfg.contains("bSizes") == cfg.contains("bSizesXY"))
