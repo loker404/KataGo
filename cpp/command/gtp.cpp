@@ -1056,6 +1056,8 @@ struct GTPEngine {
           if(abilityType > 0) {
             response += " # flying_knife " + Global::intToString(abilityType);
             logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
+            //rootPla was set to opponent by makeBoardMoveAssumeLegal, but same player continues
+            search->rootPla = hist.moveHistory.back().pla;
           }
         }
       }

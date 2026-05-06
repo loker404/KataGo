@@ -330,18 +330,9 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   //basically like a change to the komi.
   float oldWhiteHandicapBonusScore = rootHistory.whiteHandicapBonusScore;
 
-  //Compute these first so we can know if we need to set forceNonTerminal below.
-  FlyingKnifeState fkStateBefore = rootHistory.fkState;
   rootHistory.makeBoardMoveAssumeLegal(rootBoard,moveLoc,rootPla,rootKoHashTable,preventEncore);
   rootPla = rootHistory.presumedNextMovePla;
   rootKoHashTable->recompute(rootHistory);
-
-  //If a new flying knife trigger just fired, the tree structure changes fundamentally
-  //(a chance node is inserted). Clear the search to rebuild from the new state.
-  //During a sequence (remainingMovesInSequence decrementing), the tree is still valid.
-  if(rootHistory.rules.fkConfig.isEnabled() &&
-     fkStateBefore.remainingMovesInSequence == 0 && rootHistory.fkState.remainingMovesInSequence > 0)
-    clearSearch();
 
   if(rootNode != NULL) {
     SearchNode* child = NULL;

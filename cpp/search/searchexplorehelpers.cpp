@@ -651,7 +651,7 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
   if(thread.history.fkState.isInSequence())
     return false;
   //Not in trigger range
-  int moveNumber = (int)thread.history.moveHistory.size() + 1;
+  int moveNumber = (int)thread.history.moveHistory.size();
   if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
     return false;
   //Check if the player who just moved has any remaining abilities
@@ -663,7 +663,7 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
 
 float Search::computeTriggerProbability(const SearchThread& thread) const {
   const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
-  int moveNumber = (int)thread.history.moveHistory.size() + 1;
+  int moveNumber = (int)thread.history.moveHistory.size();
   Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
@@ -712,9 +712,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
 
-  int numChanceChildren = 1; // always have no-trigger
-  if(knives > 0) numChanceChildren++;
-  if(sickles > 0) numChanceChildren++;
+  int numChanceChildren = 3; // Always allocate 3: child 0 (no-trigger), child 1 (knife), child 2 (sickle)
 
   //Ensure we have capacity for the children
   bool suc = node.maybeExpandChildrenCapacityForNewChild(nodeState, numChanceChildren);
@@ -729,6 +727,9 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   Player childNextPla = (chanceChild == 0) ? getOpp(pla) : pla;
 
   //Save only the lightweight fields that applyChanceOutcome modifies
+  //NOTE: We are NOT saving/restoring board/history because playoutDescend descends into a child node
+  //and the child node expects the board/history to be in the state after applyChanceOutcome
+  //When playoutDescend returns, the board/history should already be restored to the correct state
   FlyingKnifeState savedFkState = thread.history.fkState;
   Hash128 savedGraphHash = thread.graphHash;
   Player savedPla = thread.pla;

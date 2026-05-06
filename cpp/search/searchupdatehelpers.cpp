@@ -204,7 +204,7 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
   //Always tracks the sum of statsBuf[i].weightAdjusted across the children.
   double currentTotalChildWeight = origTotalChildWeight;
 
-  if(searchParams.useNoisePruning && numGoodChildren > 0 && !(searchParams.antiMirror && mirroringPla != C_EMPTY)) {
+  if(searchParams.useNoisePruning && numGoodChildren > 0 && !(searchParams.antiMirror && mirroringPla != C_EMPTY) && !node.isChanceNode) {
     double policyProbsBuf[NNPos::MAX_NN_POLICY_SIZE];
     {
       const NNOutput* nnOutput = node.getNNOutput();
