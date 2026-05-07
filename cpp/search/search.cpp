@@ -1366,7 +1366,18 @@ bool Search::playoutDescend(
 
         //Route through the chance node to create actual game state children
         thread.graphPath.insert(chanceNode);
-        bool shouldUpdateAncestors = handleChanceNodeDescend(thread, *chanceNode, SearchNode::STATE_EXPANDED0, false);
+        // Ensure chance node is expanded to at least STATE_EXPANDED0 before handling
+        SearchNodeState chanceNodeState = chanceNode->state.load(std::memory_order_acquire);
+        if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
+          std::lock_guard<std::mutex> lock(mutexPool->getMutex(chanceNode->mutexIdx));
+          chanceNodeState = chanceNode->state.load(std::memory_order_acquire);
+          if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
+            chanceNode->initializeChildren();
+            chanceNode->state.store(SearchNode::STATE_EXPANDED0, std::memory_order_release);
+            chanceNodeState = SearchNode::STATE_EXPANDED0;
+          }
+        }
+        bool shouldUpdateAncestors = handleChanceNodeDescend(thread, *chanceNode, chanceNodeState, false);
         if(shouldUpdateAncestors) {
           nodeState = node.state.load(std::memory_order_acquire);
           SearchNodeChildrenReference childrenRef = node.getChildren(nodeState);
@@ -1418,8 +1429,16 @@ bool Search::playoutDescend(
 
       child->virtualLosses.fetch_add(1,std::memory_order_release);
 
-      //If the existing child is a chance node, route through it instead of making a board move
+      //If the existing child is a chance node, route through it
       if(child->isChanceNode) {
+        //Must make the board move first so thread state reflects the position correctly
+        thread.history.makeBoardMoveAssumeLegal(thread.board,bestChildMoveLoc,thread.pla,rootKoHashTable);
+        thread.pla = thread.history.presumedNextMovePla;
+        if(searchParams.useGraphSearch)
+          thread.graphHash = GraphHash::getGraphHash(
+            thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+          );
+
         thread.graphPath.insert(child);
         bool shouldUpdateAncestors = handleChanceNodeDescend(thread, *child, child->state.load(std::memory_order_acquire), false);
         if(shouldUpdateAncestors) {

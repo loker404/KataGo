@@ -848,6 +848,12 @@ void Search::appendPVForMove(
 
     node = child;
 
+    // Skip chance nodes in PV - they are intermediate nodes
+    if(node->isChanceNode) {
+      node = NULL;
+      return;
+    }
+
     int64_t visits = node->stats.visits.load(std::memory_order_acquire);
     int64_t edgeVisits = children[bestChildIdx].getEdgeVisits();
 
@@ -1005,6 +1011,9 @@ void Search::getAnalysisData(
       const SearchNode* child = childPointer.getIfAllocated();
       if(child == NULL)
         break;
+      // Skip chance nodes in analysis - they are intermediate nodes
+      if(child->isChanceNode)
+        continue;
       children.push_back(child);
       childrenEdgeVisits.push_back(childPointer.getEdgeVisits());
       childrenMoveLocs.push_back(childPointer.getMoveLocRelaxed());

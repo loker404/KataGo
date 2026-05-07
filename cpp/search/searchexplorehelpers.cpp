@@ -692,6 +692,7 @@ int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
 
 static void applyChanceOutcome(SearchThread& thread, int chanceChild, Player pla, Player childNextPla) {
   thread.pla = childNextPla;
+  thread.history.presumedNextMovePla = childNextPla;
   if(chanceChild == 1) {
     thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getKnifeMoves();
     thread.history.fkState.abilityOwner = pla;
@@ -709,8 +710,6 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
 
   //Determine number of children for this chance node: always child 0 (no-trigger), maybe child 1 (knife), maybe child 2 (sickle)
   Player pla = getOpp(thread.pla);
-  int knives = thread.history.fkState.getKnivesRemaining(pla);
-  int sickles = thread.history.fkState.getSicklesRemaining(pla);
 
   int numChanceChildren = 3; // Always allocate 3: child 0 (no-trigger), child 1 (knife), child 2 (sickle)
 
@@ -733,6 +732,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   FlyingKnifeState savedFkState = thread.history.fkState;
   Hash128 savedGraphHash = thread.graphHash;
   Player savedPla = thread.pla;
+  Player savedPresumedNextMovePla = thread.history.presumedNextMovePla;
 
   //Check if the selected child already exists
   SearchNode* child = children[chanceChild].getIfAllocated();
@@ -762,6 +762,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     thread.history.fkState = savedFkState;
     thread.graphHash = savedGraphHash;
     thread.pla = savedPla;
+    thread.history.presumedNextMovePla = savedPresumedNextMovePla;
 
     return shouldUpdateChildAncestors;
   }
@@ -788,6 +789,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
       thread.history.fkState = savedFkState;
       thread.graphHash = savedGraphHash;
       thread.pla = savedPla;
+      thread.history.presumedNextMovePla = savedPresumedNextMovePla;
       return false;
     }
   }
@@ -808,6 +810,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   thread.history.fkState = savedFkState;
   thread.graphHash = savedGraphHash;
   thread.pla = savedPla;
+  thread.history.presumedNextMovePla = savedPresumedNextMovePla;
 
   return shouldUpdateChildAncestors;
 }

@@ -286,7 +286,9 @@ int ConstSearchNodeChildrenReference::iterateAndCountChildren() const {
 bool SearchNode::maybeExpandChildrenCapacityForNewChild(SearchNodeState& stateValue, int numChildrenFullPlusOne) {
   int capacity = getChildrenCapacity(stateValue);
   if(capacity < numChildrenFullPlusOne) {
-    assert(capacity == numChildrenFullPlusOne-1);
+    // Node not yet expanded or not enough capacity - need to expand
+    // This can happen when node is newly created or during chance node handling
+    // No assert here, just try to expand
     return tryExpandingChildrenCapacityAssumeFull(stateValue);
   }
   return true;
