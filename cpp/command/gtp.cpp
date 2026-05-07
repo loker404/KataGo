@@ -742,7 +742,7 @@ struct GTPEngine {
     vector<int> avoidMoveUntilByLocWhite;
   };
 
-  void filterZeroVisitMoves(const AnalyzeArgs& args, vector<AnalysisData> buf) {
+  void filterZeroVisitMoves(const AnalyzeArgs& args, vector<AnalysisData>& buf) {
     //Avoid printing moves that have 0 visits, unless we need them
     //These should already be sorted so that 0-visit moves only appear at the end.
     int keptMoves = 0;
@@ -788,20 +788,20 @@ struct GTPEngine {
           cout << " lcb " << round(lcb * 10000.0);
           cout << " order " << data.order;
           cout << " pv ";
-          if(preventEncore && data.pvContainsPass())
+          if(preventEncore && data.pvContainsNonVirtualPass())
             data.writePVUpToPhaseEnd(cout,board,search->getRootHist(),search->getRootPla());
           else
             data.writePV(cout,board);
           if(args.showPVVisits) {
             cout << " pvVisits ";
-            if(preventEncore && data.pvContainsPass())
+            if(preventEncore && data.pvContainsNonVirtualPass())
               data.writePVVisitsUpToPhaseEnd(cout,board,search->getRootHist(),search->getRootPla());
             else
               data.writePVVisits(cout);
           }
           if(args.showPVEdgeVisits) {
             cout << " pvEdgeVisits ";
-            if(preventEncore && data.pvContainsPass())
+            if(preventEncore && data.pvContainsNonVirtualPass())
               data.writePVEdgeVisitsUpToPhaseEnd(cout,board,search->getRootHist(),search->getRootPla());
             else
               data.writePVEdgeVisits(cout);
@@ -888,20 +888,20 @@ struct GTPEngine {
             out << " isSymmetryOf " << Location::toString(data.isSymmetryOf,board);
           out << " order " << data.order;
           out << " pv ";
-          if(preventEncore && data.pvContainsPass())
+          if(preventEncore && data.pvContainsNonVirtualPass())
             data.writePVUpToPhaseEnd(out,board,search->getRootHist(),search->getRootPla());
           else
             data.writePV(out,board);
           if(args.showPVVisits) {
             out << " pvVisits ";
-            if(preventEncore && data.pvContainsPass())
+            if(preventEncore && data.pvContainsNonVirtualPass())
               data.writePVVisitsUpToPhaseEnd(out,board,search->getRootHist(),search->getRootPla());
             else
               data.writePVVisits(out);
           }
           if(args.showPVEdgeVisits) {
             out << " pvEdgeVisits ";
-            if(preventEncore && data.pvContainsPass())
+            if(preventEncore && data.pvContainsNonVirtualPass())
               data.writePVEdgeVisitsUpToPhaseEnd(out,board,search->getRootHist(),search->getRootPla());
             else
               data.writePVEdgeVisits(out);

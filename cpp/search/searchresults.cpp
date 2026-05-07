@@ -772,6 +772,7 @@ void Search::printRootEndingScoreValueBonus(ostream& out) const {
 
 void Search::appendPV(
   vector<Loc>& buf,
+  vector<bool>* virtualPassBuf,
   vector<int64_t>& visitsBuf,
   vector<int64_t>& edgeVisitsBuf,
   vector<Loc>& scratchLocs,
@@ -779,11 +780,12 @@ void Search::appendPV(
   const SearchNode* node,
   int maxDepth
 ) const {
-  appendPVForMove(buf,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,node,Board::NULL_LOC,maxDepth);
+  appendPVForMove(buf,virtualPassBuf,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,node,Board::NULL_LOC,maxDepth);
 }
 
 void Search::appendPVForMove(
   vector<Loc>& buf,
+  vector<bool>* virtualPassBuf,
   vector<int64_t>& visitsBuf,
   vector<int64_t>& edgeVisitsBuf,
   vector<Loc>& scratchLocs,
@@ -796,6 +798,70 @@ void Search::appendPVForMove(
     return;
 
   for(int depth = 0; depth < maxDepth; depth++) {
+    while(node != NULL && node->isChanceNode) {
+      ConstSearchNodeChildrenReference chanceChildren = node->getChildren();
+      int chanceChildrenCapacity = chanceChildren.getCapacity();
+      const SearchNode* bestChanceChild = NULL;
+      double bestChanceChildWeight = -1.0;
+      const SearchNode* bestNonTriggeredChildWithContinuation = NULL;
+      double bestNonTriggeredChildWithContinuationWeight = -1.0;
+      const SearchNode* bestTriggeredChild = NULL;
+      double bestTriggeredChildWeight = -1.0;
+      int64_t bestTriggeredChildEdgeVisits = 0;
+      bool bestTriggeredChildHasContinuation = false;
+      for(int i = 0; i<chanceChildrenCapacity; i++) {
+        const SearchChildPointer& childPointer = chanceChildren[i];
+        const SearchNode* child = childPointer.getIfAllocated();
+        if(child == NULL)
+          break;
+        int64_t edgeVisits = childPointer.getEdgeVisits();
+        double childWeight = child->stats.getChildWeight(edgeVisits);
+        if(childWeight > bestChanceChildWeight) {
+          bestChanceChildWeight = childWeight;
+          bestChanceChild = child;
+        }
+        bool childHasContinuation = false;
+        ConstSearchNodeChildrenReference nextChildren = child->getChildren();
+        int nextChildrenCapacity = nextChildren.getCapacity();
+        for(int j = 0; j<nextChildrenCapacity; j++) {
+          const SearchChildPointer& nextChildPointer = nextChildren[j];
+          const SearchNode* nextChild = nextChildPointer.getIfAllocated();
+          if(nextChild == NULL)
+            break;
+          if(nextChildPointer.getEdgeVisits() > 0) {
+            childHasContinuation = true;
+            break;
+          }
+        }
+        if(i == 0 && childHasContinuation && childWeight > bestNonTriggeredChildWithContinuationWeight) {
+          bestNonTriggeredChildWithContinuationWeight = childWeight;
+          bestNonTriggeredChildWithContinuation = child;
+        }
+        if(i > 0 && edgeVisits > 0 && childWeight > bestTriggeredChildWeight) {
+          bestTriggeredChildWeight = childWeight;
+          bestTriggeredChildEdgeVisits = edgeVisits;
+          bestTriggeredChild = child;
+          bestTriggeredChildHasContinuation = childHasContinuation;
+        }
+      }
+      if(bestTriggeredChild != NULL && bestTriggeredChildHasContinuation) {
+        bestChanceChild = bestTriggeredChild;
+        bestChanceChildWeight = bestTriggeredChildWeight;
+        buf.push_back(Board::PASS_LOC);
+        if(virtualPassBuf != NULL)
+          virtualPassBuf->push_back(true);
+        visitsBuf.push_back(bestTriggeredChild->stats.visits.load(std::memory_order_acquire));
+        edgeVisitsBuf.push_back(bestTriggeredChildEdgeVisits);
+      }
+      else if(bestNonTriggeredChildWithContinuation != NULL) {
+        bestChanceChild = bestNonTriggeredChildWithContinuation;
+        bestChanceChildWeight = bestNonTriggeredChildWithContinuationWeight;
+      }
+      node = bestChanceChild;
+    }
+    if(node == NULL)
+      return;
+
     const bool allowDirectPolicyMoves = true;
     bool success = getPlaySelectionValues(*node, scratchLocs, scratchValues, NULL, 1.0, allowDirectPolicyMoves);
     if(!success)
@@ -833,6 +899,8 @@ void Search::appendPVForMove(
     //Direct policy move
     if(bestChildIdx >= childrenCapacity) {
       buf.push_back(bestChildMoveLoc);
+      if(virtualPassBuf != NULL)
+        virtualPassBuf->push_back(false);
       visitsBuf.push_back(0);
       edgeVisitsBuf.push_back(0);
       return;
@@ -841,6 +909,8 @@ void Search::appendPVForMove(
     //Direct policy move
     if(child == NULL) {
       buf.push_back(bestChildMoveLoc);
+      if(virtualPassBuf != NULL)
+        virtualPassBuf->push_back(false);
       visitsBuf.push_back(0);
       edgeVisitsBuf.push_back(0);
       return;
@@ -848,16 +918,12 @@ void Search::appendPVForMove(
 
     node = child;
 
-    // Skip chance nodes in PV - they are intermediate nodes
-    if(node->isChanceNode) {
-      node = NULL;
-      return;
-    }
-
     int64_t visits = node->stats.visits.load(std::memory_order_acquire);
     int64_t edgeVisits = children[bestChildIdx].getEdgeVisits();
 
     buf.push_back(bestChildMoveLoc);
+    if(virtualPassBuf != NULL)
+      virtualPassBuf->push_back(false);
     visitsBuf.push_back(visits);
     edgeVisitsBuf.push_back(edgeVisits);
   }
@@ -870,7 +936,7 @@ void Search::printPV(ostream& out, const SearchNode* n, int maxDepth) const {
   vector<int64_t> edgeVisitsBuf;
   vector<Loc> scratchLocs;
   vector<double> scratchValues;
-  appendPV(buf,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,maxDepth);
+  appendPV(buf,NULL,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,maxDepth);
   printPV(out,buf);
 }
 
@@ -966,11 +1032,13 @@ AnalysisData Search::getAnalysisDataOfSingleChild(
 
   data.pv.clear();
   data.pv.push_back(move);
+  data.pvIsVirtualPass.clear();
+  data.pvIsVirtualPass.push_back(false);
   data.pvVisits.clear();
   data.pvVisits.push_back(childVisits);
   data.pvEdgeVisits.clear();
   data.pvEdgeVisits.push_back(edgeVisits);
-  appendPV(data.pv, data.pvVisits, data.pvEdgeVisits, scratchLocs, scratchValues, child, maxPVDepth);
+  appendPV(data.pv, &data.pvIsVirtualPass, data.pvVisits, data.pvEdgeVisits, scratchLocs, scratchValues, child, maxPVDepth);
 
   data.node = child;
 
@@ -1011,9 +1079,6 @@ void Search::getAnalysisData(
       const SearchNode* child = childPointer.getIfAllocated();
       if(child == NULL)
         break;
-      // Skip chance nodes in analysis - they are intermediate nodes
-      if(child->isChanceNode)
-        continue;
       children.push_back(child);
       childrenEdgeVisits.push_back(childPointer.getEdgeVisits());
       childrenMoveLocs.push_back(childPointer.getMoveLocRelaxed());
@@ -1208,7 +1273,7 @@ void Search::printPVForMove(ostream& out, const SearchNode* n, Loc move, int max
   vector<int64_t> edgeVisitsBuf;
   vector<Loc> scratchLocs;
   vector<double> scratchValues;
-  appendPVForMove(buf,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,move,maxDepth);
+    appendPVForMove(buf,NULL,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,move,maxDepth);
   for(int i = 0; i<buf.size(); i++) {
     if(i > 0)
       out << " ";
@@ -2076,7 +2141,7 @@ bool Search::getAnalysisJson(
 
     json pv = json::array();
     int pvLen =
-      (preventEncore && data.pvContainsPass()) ? data.getPVLenUpToPhaseEnd(board, hist, rootPla) : (int)data.pv.size();
+      (preventEncore && data.pvContainsNonVirtualPass()) ? data.getPVLenUpToPhaseEnd(board, hist, rootPla) : (int)data.pv.size();
     for(int j = 0; j < pvLen; j++)
       pv.push_back(Location::toString(data.pv[j], board));
     moveInfo["pv"] = pv;

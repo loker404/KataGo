@@ -359,6 +359,7 @@ struct Search {
   //Append the PV from node n onward (not including the move if any that reached node n)
   void appendPV(
     std::vector<Loc>& buf,
+    std::vector<bool>* virtualPassBuf,
     std::vector<int64_t>& visitsBuf,
     std::vector<int64_t>& edgeVisitsBuf,
     std::vector<Loc>& scratchLocs,
@@ -369,6 +370,7 @@ struct Search {
   //Append the PV from node n for specified move, assuming move is a child move of node n
   void appendPVForMove(
     std::vector<Loc>& buf,
+    std::vector<bool>* virtualPassBuf,
     std::vector<int64_t>& visitsBuf,
     std::vector<int64_t>& edgeVisitsBuf,
     std::vector<Loc>& scratchLocs,

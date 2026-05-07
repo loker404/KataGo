@@ -34,6 +34,7 @@ struct AnalysisData {
   Loc isSymmetryOf; //If not Board::NULL_LOC, this move is a duplicate analysis data reflected from isSymmetryOf
   int symmetry; //The symmetry applied to isSymmetryOf to get move, or 0.
   std::vector<Loc> pv;
+  std::vector<bool> pvIsVirtualPass;
   std::vector<int64_t> pvVisits;
   std::vector<int64_t> pvEdgeVisits;
 
@@ -48,6 +49,7 @@ struct AnalysisData {
   AnalysisData& operator=(AnalysisData&& other) noexcept;
 
   bool pvContainsPass() const;
+  bool pvContainsNonVirtualPass() const;
   void writePV(std::ostream& out, const Board& board) const;
   void writePVVisits(std::ostream& out) const;
   void writePVEdgeVisits(std::ostream& out) const;

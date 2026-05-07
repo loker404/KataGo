@@ -29,6 +29,7 @@ AnalysisData::AnalysisData()
    isSymmetryOf(Board::NULL_LOC),
    symmetry(0),
    pv(),
+   pvIsVirtualPass(),
    pvVisits(),
    pvEdgeVisits(),
    node(NULL)
@@ -61,6 +62,7 @@ AnalysisData::AnalysisData(const AnalysisData& other)
    isSymmetryOf(other.isSymmetryOf),
    symmetry(other.symmetry),
    pv(other.pv),
+   pvIsVirtualPass(other.pvIsVirtualPass),
    pvVisits(other.pvVisits),
    pvEdgeVisits(other.pvEdgeVisits),
    node(other.node)
@@ -93,6 +95,7 @@ AnalysisData::AnalysisData(AnalysisData&& other) noexcept
    isSymmetryOf(other.isSymmetryOf),
    symmetry(other.symmetry),
    pv(std::move(other.pv)),
+   pvIsVirtualPass(std::move(other.pvIsVirtualPass)),
    pvVisits(std::move(other.pvVisits)),
    pvEdgeVisits(std::move(other.pvEdgeVisits)),
    node(other.node)
@@ -130,6 +133,7 @@ AnalysisData& AnalysisData::operator=(const AnalysisData& other) {
   isSymmetryOf = other.isSymmetryOf;
   symmetry = other.symmetry;
   pv = other.pv;
+  pvIsVirtualPass = other.pvIsVirtualPass;
   pvVisits = other.pvVisits;
   pvEdgeVisits = other.pvEdgeVisits;
   node = other.node;
@@ -165,6 +169,7 @@ AnalysisData& AnalysisData::operator=(AnalysisData&& other) noexcept {
   isSymmetryOf = other.isSymmetryOf;
   symmetry = other.symmetry;
   pv = std::move(other.pv);
+  pvIsVirtualPass = std::move(other.pvIsVirtualPass);
   pvVisits = std::move(other.pvVisits);
   pvEdgeVisits = std::move(other.pvEdgeVisits);
   node = other.node;
@@ -199,11 +204,24 @@ bool AnalysisData::pvContainsPass() const {
   return false;
 }
 
+bool AnalysisData::pvContainsNonVirtualPass() const {
+  for(int i = 0; i<pv.size(); i++) {
+    bool isVirtualPass = i < pvIsVirtualPass.size() && pvIsVirtualPass[i];
+    if(pv[i] == Board::PASS_LOC && !isVirtualPass)
+      return true;
+  }
+  return false;
+}
+
 void AnalysisData::writePV(std::ostream& out, const Board& board) const {
   for(int j = 0; j<pv.size(); j++) {
     if(j > 0)
       out << " ";
-    out << Location::toString(pv[j],board);
+    bool isVirtualPass = j < pvIsVirtualPass.size() && pvIsVirtualPass[j];
+    if(isVirtualPass)
+      out << "PASS";
+    else
+      out << Location::toString(pv[j],board);
   }
 }
 
