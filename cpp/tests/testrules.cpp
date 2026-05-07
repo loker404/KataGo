@@ -5396,6 +5396,38 @@ Last moves pass pass pass pass H7 G9 F9 H7
   }
 
   {
+    Rules rules = Rules::getTrompTaylorish();
+    rules.fkConfig = FlyingKnifeConfig::fromString("start=3,end=9,bk=1,bs=0,wk=0,ws=2");
+
+    Rules parsed;
+    bool suc = Rules::tryParseRules(rules.toJsonString(), parsed);
+    testAssert(suc);
+    testAssert(rules == parsed);
+
+    Rules parsedNoKomi;
+    suc = Rules::tryParseRulesWithoutKomi(rules.toJsonStringNoKomi(), parsedNoKomi, rules.komi);
+    testAssert(suc);
+    testAssert(rules == parsedNoKomi);
+  }
+
+  {
+    Rules rules = Rules::getTrompTaylorish();
+    rules.fkConfig = FlyingKnifeConfig::fromString("start=1,end=10,bk=1,bs=0,wk=0,ws=0");
+    Board board(5,5);
+    BoardHistory hist(board,P_BLACK,rules,0);
+    hist.fkState.remainingMovesInSequence = FlyingKnifeConfig::getKnifeMoves();
+    hist.fkState.abilityOwner = P_BLACK;
+
+    hist.makeBoardMoveAssumeLegal(board, Location::getLoc(0,0,board.x_size), P_BLACK, NULL);
+    testAssert(hist.fkState.remainingMovesInSequence == 1);
+    testAssert(hist.presumedNextMovePla == P_BLACK);
+
+    hist.makeBoardMoveAssumeLegal(board, Location::getLoc(1,0,board.x_size), P_BLACK, NULL);
+    testAssert(hist.fkState.remainingMovesInSequence == 0);
+    testAssert(hist.presumedNextMovePla == P_WHITE);
+  }
+
+  {
     const char* name = "Rules parsing bug";
     Rules parsed = Rules::parseRules("komi23taxALL");
     out << parsed << endl;

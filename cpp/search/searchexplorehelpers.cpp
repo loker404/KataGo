@@ -693,19 +693,37 @@ int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
   return 2;
 }
 
-static void applyChanceOutcome(SearchThread& thread, int chanceChild, Player pla, Player childNextPla) {
+static int getChanceChildIndexForOutcome(const SearchThread& thread, Player pla, int chanceOutcome) {
+  if(chanceOutcome == 0)
+    return 0;
+  if(chanceOutcome == 1)
+    return 1;
+  assert(chanceOutcome == 2);
+  return thread.history.fkState.getKnivesRemaining(pla) > 0 ? 2 : 1;
+}
+
+static int getNumChanceChildrenForState(const SearchThread& thread, Player pla) {
+  int numChildren = 1;
+  if(thread.history.fkState.getKnivesRemaining(pla) > 0)
+    numChildren++;
+  if(thread.history.fkState.getSicklesRemaining(pla) > 0)
+    numChildren++;
+  return numChildren;
+}
+
+static void applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player pla, Player childNextPla) {
   thread.pla = childNextPla;
   thread.history.presumedNextMovePla = childNextPla;
-  if(chanceChild == 1) {
+  if(chanceOutcome == 1) {
     thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getKnifeMoves();
     thread.history.fkState.abilityOwner = pla;
     thread.history.fkState.decrementKnives(pla);
-  } else if(chanceChild == 2) {
+  } else if(chanceOutcome == 2) {
     thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getSickleMoves();
     thread.history.fkState.abilityOwner = pla;
     thread.history.fkState.decrementSickles(pla);
   }
-  if(chanceChild != 0) {
+  if(chanceOutcome != 0) {
     thread.history.fkState.manualPassPla = C_EMPTY;
     thread.history.fkState.manualPassMoveNumber = 0;
     thread.history.fkState.manualPassConsumedKnife = false;
@@ -715,12 +733,13 @@ static void applyChanceOutcome(SearchThread& thread, int chanceChild, Player pla
 
 bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot) {
   float triggerProb = computeTriggerProbability(thread);
-  int chanceChild = selectChanceChild(thread, triggerProb);
+  int chanceOutcome = selectChanceChild(thread, triggerProb);
 
-  //Determine number of children for this chance node: always child 0 (no-trigger), maybe child 1 (knife), maybe child 2 (sickle)
+  //Use contiguous child slots for the currently possible outcomes. Outcome values are:
+  //0 = no-trigger, 1 = knife, 2 = sickle.
   Player pla = getOpp(thread.pla);
-
-  int numChanceChildren = 3; // Always allocate 3: child 0 (no-trigger), child 1 (knife), child 2 (sickle)
+  int chanceChild = getChanceChildIndexForOutcome(thread, pla, chanceOutcome);
+  int numChanceChildren = getNumChanceChildrenForState(thread, pla);
 
   //Ensure we have capacity for the children
   bool suc = node.maybeExpandChildrenCapacityForNewChild(nodeState, numChanceChildren);
@@ -732,7 +751,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   SearchNodeChildrenReference children = node.getChildren(nodeState);
 
   //Determine the child's nextPla
-  Player childNextPla = (chanceChild == 0) ? getOpp(pla) : pla;
+  Player childNextPla = (chanceOutcome == 0) ? getOpp(pla) : pla;
 
   //Save only the lightweight fields that applyChanceOutcome modifies
   //NOTE: We are NOT saving/restoring board/history because playoutDescend descends into a child node
@@ -749,7 +768,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     //Child exists, just descend into it
     child->virtualLosses.fetch_add(1, std::memory_order_release);
 
-    applyChanceOutcome(thread, chanceChild, pla, childNextPla);
+    applyChanceOutcome(thread, chanceOutcome, pla, childNextPla);
     if(searchParams.useGraphSearch)
       thread.graphHash = GraphHash::getGraphHash(
         thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
@@ -777,7 +796,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   }
 
   //Need to create a new child node
-  applyChanceOutcome(thread, chanceChild, pla, childNextPla);
+  applyChanceOutcome(thread, chanceOutcome, pla, childNextPla);
   if(searchParams.useGraphSearch)
     thread.graphHash = GraphHash::getGraphHash(
       thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite

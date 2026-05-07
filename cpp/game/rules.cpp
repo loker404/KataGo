@@ -108,6 +108,50 @@ std::string FlyingKnifeConfig::toString() const {
   return out.str();
 }
 
+static FlyingKnifeConfig parseFlyingKnifeConfigJson(const nlohmann::json& input) {
+  if(input.is_null())
+    return FlyingKnifeConfig();
+  if(input.is_boolean()) {
+    if(!input.get<bool>())
+      return FlyingKnifeConfig();
+    throw IOError("FlyingKnifeConfig: boolean true is not a valid config");
+  }
+  if(input.is_string())
+    return FlyingKnifeConfig::fromString(input.get<string>());
+  if(!input.is_object())
+    throw IOError("FlyingKnifeConfig: expected object");
+
+  FlyingKnifeConfig config;
+  for(json::const_iterator iter = input.begin(); iter != input.end(); ++iter) {
+    const string& key = iter.key();
+    int value = iter.value().get<int>();
+    if(key == "rangeStart")
+      config.triggerRangeStart = value;
+    else if(key == "rangeEnd")
+      config.triggerRangeEnd = value;
+    else if(key == "blackKnife")
+      config.blackKnifeCount = value;
+    else if(key == "blackSickle")
+      config.blackSickleCount = value;
+    else if(key == "whiteKnife")
+      config.whiteKnifeCount = value;
+    else if(key == "whiteSickle")
+      config.whiteSickleCount = value;
+    else
+      throw IOError("FlyingKnifeConfig: unknown key: " + key);
+  }
+
+  if(config.triggerRangeStart < 0)
+    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
+  if(config.triggerRangeEnd < config.triggerRangeStart)
+    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
+  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
+     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
+    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+
+  return config;
+}
+
 //Rules implementation
 
 Rules::Rules() {
@@ -514,6 +558,8 @@ static Rules parseRulesHelper(const string& sOrig, bool allowKomi) {
           rules.whiteHandicapBonusRule = Rules::parseWhiteHandicapBonusRule(iter.value().get<string>());
         else if(key == "friendlyPassOk")
           rules.friendlyPassOk = iter.value().get<bool>();
+        else if(key == "flyingKnife")
+          rules.fkConfig = parseFlyingKnifeConfigJson(iter.value());
         else if(key == "komi") {
           if(!allowKomi)
             throw IOError("Unknown rules option: " + key);

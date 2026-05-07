@@ -1096,7 +1096,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   if(fkState.isInSequence()) {
     assert(fkState.remainingMovesInSequence > 0);
     fkState.remainingMovesInSequence--;
-    nextPlaAfterMove = movePla;  // Same player continues
+    nextPlaAfterMove = fkState.remainingMovesInSequence > 0 ? movePla : getOpp(movePla);
   } else {
     nextPlaAfterMove = getOpp(movePla);  // Normal alternation
   }
