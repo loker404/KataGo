@@ -1044,45 +1044,47 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
     if(moveNumberAfterThisMove >= rules.fkConfig.triggerRangeStart &&
        moveNumberAfterThisMove <= rules.fkConfig.triggerRangeEnd) {
-      bool isSecondManualPassForSickle = false;
-      if(moveHistory.size() >= 2) {
-        const Move& previousSamePlaMove = moveHistory[moveHistory.size()-2];
-        const Move& interveningMove = moveHistory[moveHistory.size()-1];
-        int previousSamePlaMoveNumber = (int)moveHistory.size() - 1;
-        bool previousSamePlaMoveWasSecondManualPass = false;
-        if(moveHistory.size() >= 4) {
-          const Move& twoBackSamePlaMove = moveHistory[moveHistory.size()-4];
-          const Move& previousInterveningMove = moveHistory[moveHistory.size()-3];
-          int twoBackSamePlaMoveNumber = (int)moveHistory.size() - 3;
-          previousSamePlaMoveWasSecondManualPass =
-            twoBackSamePlaMove.loc == Board::PASS_LOC &&
-            twoBackSamePlaMove.pla == movePla &&
-            previousInterveningMove.pla == getOpp(movePla) &&
-            previousInterveningMove.loc != Board::PASS_LOC &&
-            twoBackSamePlaMoveNumber >= rules.fkConfig.triggerRangeStart &&
-            twoBackSamePlaMoveNumber <= rules.fkConfig.triggerRangeEnd;
-        }
-        isSecondManualPassForSickle =
-          !previousSamePlaMoveWasSecondManualPass &&
-          previousSamePlaMove.loc == Board::PASS_LOC &&
-          previousSamePlaMove.pla == movePla &&
-          interveningMove.pla == getOpp(movePla) &&
-          interveningMove.loc != Board::PASS_LOC &&
-          previousSamePlaMoveNumber >= rules.fkConfig.triggerRangeStart &&
-          previousSamePlaMoveNumber <= rules.fkConfig.triggerRangeEnd;
-      }
+      bool isSecondManualPassForSickle =
+        fkState.manualPassCanPairForSickle &&
+        fkState.manualPassPla == movePla &&
+        fkState.manualPassMoveNumber == moveNumberAfterThisMove - 2 &&
+        moveHistory.size() >= 1 &&
+        moveHistory[moveHistory.size()-1].pla == getOpp(movePla) &&
+        moveHistory[moveHistory.size()-1].loc != Board::PASS_LOC;
 
       if(isSecondManualPassForSickle && fkState.getSicklesRemaining(movePla) > 0) {
-        int configuredKnives = movePla == P_BLACK ? rules.fkConfig.blackKnifeCount : rules.fkConfig.whiteKnifeCount;
-        int& knivesRemaining = movePla == P_BLACK ? fkState.blackKnivesRemaining : fkState.whiteKnivesRemaining;
-        if(knivesRemaining < configuredKnives)
+        if(fkState.manualPassConsumedKnife) {
+          int& knivesRemaining = movePla == P_BLACK ? fkState.blackKnivesRemaining : fkState.whiteKnivesRemaining;
           knivesRemaining++;
+        }
         fkState.decrementSickles(movePla);
+        fkState.manualPassPla = movePla;
+        fkState.manualPassMoveNumber = moveNumberAfterThisMove;
+        fkState.manualPassConsumedKnife = false;
+        fkState.manualPassCanPairForSickle = false;
       }
       else if(fkState.getKnivesRemaining(movePla) > 0) {
         fkState.decrementKnives(movePla);
+        fkState.manualPassPla = movePla;
+        fkState.manualPassMoveNumber = moveNumberAfterThisMove;
+        fkState.manualPassConsumedKnife = true;
+        fkState.manualPassCanPairForSickle = true;
+      }
+      else {
+        fkState.manualPassPla = movePla;
+        fkState.manualPassMoveNumber = moveNumberAfterThisMove;
+        fkState.manualPassConsumedKnife = false;
+        fkState.manualPassCanPairForSickle = true;
       }
     }
+  }
+
+  int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
+  if(fkState.manualPassCanPairForSickle && fkState.manualPassMoveNumber < moveNumberAfterThisMove - 1) {
+    fkState.manualPassPla = C_EMPTY;
+    fkState.manualPassMoveNumber = 0;
+    fkState.manualPassConsumedKnife = false;
+    fkState.manualPassCanPairForSickle = false;
   }
 
   //Update recent boards
@@ -1114,6 +1116,14 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 * (uint64_t)fkState.blackSicklesRemaining;
     koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 * (uint64_t)fkState.whiteSicklesRemaining;
     koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)fkState.whiteSicklesRemaining;
+    testAssert(fkState.manualPassPla >= 0 && fkState.manualPassPla <= 2);
+    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[fkState.manualPassPla];
+    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 * (uint64_t)fkState.manualPassMoveNumber;
+    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 * (uint64_t)fkState.manualPassMoveNumber;
+    if(fkState.manualPassConsumedKnife)
+      koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
+    if(fkState.manualPassCanPairForSickle)
+      koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE;
   }
   koHashHistory.push_back(koHashAfterThisMove);
   moveHistory.emplace_back(moveLoc,movePla);
@@ -1433,6 +1443,11 @@ const Hash128 FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[3] = {
   Hash128(0xacba7264f60f9b60ULL, 0x85e468f3c86272c7ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[1]"
   Hash128(0x2730eeef8986428dULL, 0xffbec9da27b29eb2ULL),  //Based on sha256 hash of "FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[2]"
 };
+const Hash128 FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[3] = {
+  Hash128(0x0000000000000000ULL, 0x0000000000000000ULL),
+  Hash128(0x5e617db2fd9f4a9bULL, 0x0f91e27bc345b8d2ULL),
+  Hash128(0x8c2f90ad14367ec5ULL, 0x7b6e3c4a95d201afULL),
+};
 
 const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT0 = 0x4a2e83f17b5d9c6aULL;
 const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT1 = 0x7e1d483a9f26c5b0ULL;
@@ -1442,6 +1457,10 @@ const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT0 = 0xd385f62e14a7
 const uint64_t FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 = 0x29c4b7e86f31d5a0ULL;
 const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 = 0x8f41c5a7d23e6b90ULL;
 const uint64_t FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 = 0x1a6e9d3b5c8f0742ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 = 0x6d5a2b9e47c138f3ULL;
+const uint64_t FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 = 0xc4f17a6e28b5930dULL;
+const Hash128 FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE = Hash128(0x3f8a91c72d5e640bULL, 0xb0e46d197c2a58f3ULL);
+const Hash128 FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE = Hash128(0x91d74eab063fc285ULL, 0x2c5b8f40d6a1739eULL);
 
 //Flying knife initialization and trigger methods
 
@@ -1498,6 +1517,10 @@ int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla
 
   fkState.remainingMovesInSequence = abilityType;  // 2 for knife, 3 for sickle
   fkState.abilityOwner = pla;
+  fkState.manualPassPla = C_EMPTY;
+  fkState.manualPassMoveNumber = 0;
+  fkState.manualPassConsumedKnife = false;
+  fkState.manualPassCanPairForSickle = false;
 
   return abilityType;
 }

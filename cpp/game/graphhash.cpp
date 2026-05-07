@@ -34,6 +34,14 @@ Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, dou
     hash.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 * (uint64_t)hist.fkState.blackSicklesRemaining;
     hash.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 * (uint64_t)hist.fkState.whiteSicklesRemaining;
     hash.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)hist.fkState.whiteSicklesRemaining;
+    testAssert(hist.fkState.manualPassPla >= 0 && hist.fkState.manualPassPla <= 2);
+    hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[hist.fkState.manualPassPla];
+    hash.hash0 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 * (uint64_t)hist.fkState.manualPassMoveNumber;
+    hash.hash1 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 * (uint64_t)hist.fkState.manualPassMoveNumber;
+    if(hist.fkState.manualPassConsumedKnife)
+      hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
+    if(hist.fkState.manualPassCanPairForSickle)
+      hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE;
   }
 
   return hash;

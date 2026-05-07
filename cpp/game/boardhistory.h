@@ -17,6 +17,10 @@ struct FlyingKnifeState {
 
   int remainingMovesInSequence = 0;
   Player abilityOwner = C_EMPTY;
+  Player manualPassPla = C_EMPTY;
+  int manualPassMoveNumber = 0;
+  bool manualPassConsumedKnife = false;
+  bool manualPassCanPairForSickle = false;
 
   bool isInSequence() const { return remainingMovesInSequence > 0; }
 
@@ -31,13 +35,18 @@ struct FlyingKnifeState {
            whiteKnivesRemaining == other.whiteKnivesRemaining &&
            whiteSicklesRemaining == other.whiteSicklesRemaining &&
            remainingMovesInSequence == other.remainingMovesInSequence &&
-           abilityOwner == other.abilityOwner;
+           abilityOwner == other.abilityOwner &&
+           manualPassPla == other.manualPassPla &&
+           manualPassMoveNumber == other.manualPassMoveNumber &&
+           manualPassConsumedKnife == other.manualPassConsumedKnife &&
+           manualPassCanPairForSickle == other.manualPassCanPairForSickle;
   }
   bool operator!=(const FlyingKnifeState& other) const { return !(*this == other); }
 
   static constexpr int MAX_FK_SEQUENCE_MOVES = 3;
   static const Hash128 ZOBRIST_FK_REMAINING_MOVES[MAX_FK_SEQUENCE_MOVES + 1];
   static const Hash128 ZOBRIST_FK_ABILITY_OWNER[3];
+  static const Hash128 ZOBRIST_FK_MANUAL_PASS_PLA[3];
   static const uint64_t ZOBRIST_FK_BLACK_KNIVES_MULT0;
   static const uint64_t ZOBRIST_FK_BLACK_KNIVES_MULT1;
   static const uint64_t ZOBRIST_FK_WHITE_KNIVES_MULT0;
@@ -46,6 +55,10 @@ struct FlyingKnifeState {
   static const uint64_t ZOBRIST_FK_BLACK_SICKLES_MULT1;
   static const uint64_t ZOBRIST_FK_WHITE_SICKLES_MULT0;
   static const uint64_t ZOBRIST_FK_WHITE_SICKLES_MULT1;
+  static const uint64_t ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0;
+  static const uint64_t ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1;
+  static const Hash128 ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
+  static const Hash128 ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE;
 };
 
 //A data structure enabling checking of move legality, including optionally superko,

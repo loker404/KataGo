@@ -705,6 +705,12 @@ static void applyChanceOutcome(SearchThread& thread, int chanceChild, Player pla
     thread.history.fkState.abilityOwner = pla;
     thread.history.fkState.decrementSickles(pla);
   }
+  if(chanceChild != 0) {
+    thread.history.fkState.manualPassPla = C_EMPTY;
+    thread.history.fkState.manualPassMoveNumber = 0;
+    thread.history.fkState.manualPassConsumedKnife = false;
+    thread.history.fkState.manualPassCanPairForSickle = false;
+  }
 }
 
 bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot) {
