@@ -990,7 +990,8 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
     for(; i<childrenCapacity; i++) {
       SearchNode* child = children[i].getIfAllocated();
       (void)child;
-      assert(child == NULL);
+      if(!node->isChanceNode)
+        assert(child == NULL);
     }
 
     //If this node has children, it MUST also have an nnOutput.
@@ -1011,7 +1012,7 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
     //If the node has no children, then just update its utility directly
     //Again, this would be a little wrong if this function were running concurrently with anything else in the
     //case that new children were added in the meantime. Although maybe it would be okay.
-    if(!foundAnyChildren) {
+    if(!foundAnyChildren && !node->isChanceNode) {
       int64_t numVisits = node->stats.visits.load(std::memory_order_acquire);
       double weightSum = node->stats.weightSum.load(std::memory_order_acquire);
       double winLossValueAvg = node->stats.winLossValueAvg.load(std::memory_order_acquire);
@@ -1039,7 +1040,7 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
         node->statsLock.clear(std::memory_order_release);
       }
     }
-    else {
+    else if(!node->isChanceNode) {
       //Otherwise recompute it using the usual method
       recomputeNodeStats(*node, thread, 0, isRoot);
     }
