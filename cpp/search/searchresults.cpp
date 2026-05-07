@@ -797,18 +797,42 @@ void Search::appendPVForMove(
   if(node == NULL)
     return;
 
+  Player expectedPla = rootPla;
+  if(virtualPassBuf != NULL) {
+    for(Loc loc: buf) {
+      if(loc != Board::NULL_LOC)
+        expectedPla = getOpp(expectedPla);
+    }
+  }
+
+  auto appendVirtualPassIfNeeded = [&](const SearchNode* moveNode) {
+    if(virtualPassBuf == NULL || moveNode == NULL)
+      return;
+    if(moveNode->nextPla == expectedPla)
+      return;
+    buf.push_back(Board::PASS_LOC);
+    virtualPassBuf->push_back(true);
+    visitsBuf.push_back(moveNode->stats.visits.load(std::memory_order_acquire));
+    edgeVisitsBuf.push_back(0);
+    expectedPla = getOpp(expectedPla);
+  };
+
+  auto appendRealPVMove = [&](Loc moveLoc, int64_t visits, int64_t edgeVisits) {
+    buf.push_back(moveLoc);
+    if(virtualPassBuf != NULL) {
+      virtualPassBuf->push_back(false);
+      expectedPla = getOpp(expectedPla);
+    }
+    visitsBuf.push_back(visits);
+    edgeVisitsBuf.push_back(edgeVisits);
+  };
+
   for(int depth = 0; depth < maxDepth; depth++) {
     while(node != NULL && node->isChanceNode) {
       ConstSearchNodeChildrenReference chanceChildren = node->getChildren();
       int chanceChildrenCapacity = chanceChildren.getCapacity();
       const SearchNode* bestChanceChild = NULL;
       double bestChanceChildWeight = -1.0;
-      const SearchNode* bestNonTriggeredChildWithContinuation = NULL;
-      double bestNonTriggeredChildWithContinuationWeight = -1.0;
-      const SearchNode* bestTriggeredChild = NULL;
-      double bestTriggeredChildWeight = -1.0;
-      int64_t bestTriggeredChildEdgeVisits = 0;
-      bool bestTriggeredChildHasContinuation = false;
       for(int i = 0; i<chanceChildrenCapacity; i++) {
         const SearchChildPointer& childPointer = chanceChildren[i];
         const SearchNode* child = childPointer.getIfAllocated();
@@ -820,42 +844,6 @@ void Search::appendPVForMove(
           bestChanceChildWeight = childWeight;
           bestChanceChild = child;
         }
-        bool childHasContinuation = false;
-        ConstSearchNodeChildrenReference nextChildren = child->getChildren();
-        int nextChildrenCapacity = nextChildren.getCapacity();
-        for(int j = 0; j<nextChildrenCapacity; j++) {
-          const SearchChildPointer& nextChildPointer = nextChildren[j];
-          const SearchNode* nextChild = nextChildPointer.getIfAllocated();
-          if(nextChild == NULL)
-            break;
-          if(nextChildPointer.getEdgeVisits() > 0) {
-            childHasContinuation = true;
-            break;
-          }
-        }
-        if(i == 0 && childHasContinuation && childWeight > bestNonTriggeredChildWithContinuationWeight) {
-          bestNonTriggeredChildWithContinuationWeight = childWeight;
-          bestNonTriggeredChildWithContinuation = child;
-        }
-        if(i > 0 && edgeVisits > 0 && childWeight > bestTriggeredChildWeight) {
-          bestTriggeredChildWeight = childWeight;
-          bestTriggeredChildEdgeVisits = edgeVisits;
-          bestTriggeredChild = child;
-          bestTriggeredChildHasContinuation = childHasContinuation;
-        }
-      }
-      if(bestTriggeredChild != NULL && bestTriggeredChildHasContinuation) {
-        bestChanceChild = bestTriggeredChild;
-        bestChanceChildWeight = bestTriggeredChildWeight;
-        buf.push_back(Board::PASS_LOC);
-        if(virtualPassBuf != NULL)
-          virtualPassBuf->push_back(true);
-        visitsBuf.push_back(bestTriggeredChild->stats.visits.load(std::memory_order_acquire));
-        edgeVisitsBuf.push_back(bestTriggeredChildEdgeVisits);
-      }
-      else if(bestNonTriggeredChildWithContinuation != NULL) {
-        bestChanceChild = bestNonTriggeredChildWithContinuation;
-        bestChanceChildWeight = bestNonTriggeredChildWithContinuationWeight;
       }
       node = bestChanceChild;
     }
@@ -898,34 +886,25 @@ void Search::appendPVForMove(
     int childrenCapacity = children.getCapacity();
     //Direct policy move
     if(bestChildIdx >= childrenCapacity) {
-      buf.push_back(bestChildMoveLoc);
-      if(virtualPassBuf != NULL)
-        virtualPassBuf->push_back(false);
-      visitsBuf.push_back(0);
-      edgeVisitsBuf.push_back(0);
+      appendVirtualPassIfNeeded(node);
+      appendRealPVMove(bestChildMoveLoc,0,0);
       return;
     }
     const SearchNode* child = children[bestChildIdx].getIfAllocated();
     //Direct policy move
     if(child == NULL) {
-      buf.push_back(bestChildMoveLoc);
-      if(virtualPassBuf != NULL)
-        virtualPassBuf->push_back(false);
-      visitsBuf.push_back(0);
-      edgeVisitsBuf.push_back(0);
+      appendVirtualPassIfNeeded(node);
+      appendRealPVMove(bestChildMoveLoc,0,0);
       return;
     }
 
+    appendVirtualPassIfNeeded(node);
     node = child;
 
     int64_t visits = node->stats.visits.load(std::memory_order_acquire);
     int64_t edgeVisits = children[bestChildIdx].getEdgeVisits();
 
-    buf.push_back(bestChildMoveLoc);
-    if(virtualPassBuf != NULL)
-      virtualPassBuf->push_back(false);
-    visitsBuf.push_back(visits);
-    edgeVisitsBuf.push_back(edgeVisits);
+    appendRealPVMove(bestChildMoveLoc,visits,edgeVisits);
   }
 }
 

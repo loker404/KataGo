@@ -652,6 +652,8 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
     return false;
   //Not in trigger range
   int moveNumber = (int)thread.history.moveHistory.size();
+  if(moveNumber > 0 && thread.history.moveHistory[moveNumber-1].loc == Board::PASS_LOC)
+    return false;
   if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
     return false;
   //Check if the player who just moved has any remaining abilities
@@ -665,11 +667,12 @@ float Search::computeTriggerProbability(const SearchThread& thread) const {
   const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
   int moveNumber = (int)thread.history.moveHistory.size();
   Player pla = getOpp(thread.pla);
-  int knives = thread.history.fkState.getKnivesRemaining(pla);
-  int sickles = thread.history.fkState.getSicklesRemaining(pla);
-  int totalAbilities = knives + sickles;
+  int totalAbilities =
+    thread.history.fkState.getKnivesRemaining(pla) +
+    thread.history.fkState.getSicklesRemaining(pla);
   int remainingRange = fkConfig.triggerRangeEnd - moveNumber + 1;
-  return (float)totalAbilities / (float)(remainingRange + totalAbilities);
+  int remainingOpportunitiesForPla = remainingRange <= 0 ? 0 : 1 + (remainingRange - 1) / 2;
+  return remainingOpportunitiesForPla <= 0 ? 1.0f : std::min(1.0f, (float)totalAbilities / (float)remainingOpportunitiesForPla);
 }
 
 int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {

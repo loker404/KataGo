@@ -1036,6 +1036,55 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
     }
   }
 
+  // In flying-knife mode, real passes in the trigger range are manual ability
+  // markers for UI-driven consecutive play. One pass consumes a knife. Two
+  // passes by the same player with exactly one intervening opponent move are
+  // combined into a sickle, refunding the first knife if it was consumed.
+  if(moveLoc == Board::PASS_LOC && rules.fkConfig.isEnabled() && !fkState.isInSequence()) {
+    int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
+    if(moveNumberAfterThisMove >= rules.fkConfig.triggerRangeStart &&
+       moveNumberAfterThisMove <= rules.fkConfig.triggerRangeEnd) {
+      bool isSecondManualPassForSickle = false;
+      if(moveHistory.size() >= 2) {
+        const Move& previousSamePlaMove = moveHistory[moveHistory.size()-2];
+        const Move& interveningMove = moveHistory[moveHistory.size()-1];
+        int previousSamePlaMoveNumber = (int)moveHistory.size() - 1;
+        bool previousSamePlaMoveWasSecondManualPass = false;
+        if(moveHistory.size() >= 4) {
+          const Move& twoBackSamePlaMove = moveHistory[moveHistory.size()-4];
+          const Move& previousInterveningMove = moveHistory[moveHistory.size()-3];
+          int twoBackSamePlaMoveNumber = (int)moveHistory.size() - 3;
+          previousSamePlaMoveWasSecondManualPass =
+            twoBackSamePlaMove.loc == Board::PASS_LOC &&
+            twoBackSamePlaMove.pla == movePla &&
+            previousInterveningMove.pla == getOpp(movePla) &&
+            previousInterveningMove.loc != Board::PASS_LOC &&
+            twoBackSamePlaMoveNumber >= rules.fkConfig.triggerRangeStart &&
+            twoBackSamePlaMoveNumber <= rules.fkConfig.triggerRangeEnd;
+        }
+        isSecondManualPassForSickle =
+          !previousSamePlaMoveWasSecondManualPass &&
+          previousSamePlaMove.loc == Board::PASS_LOC &&
+          previousSamePlaMove.pla == movePla &&
+          interveningMove.pla == getOpp(movePla) &&
+          interveningMove.loc != Board::PASS_LOC &&
+          previousSamePlaMoveNumber >= rules.fkConfig.triggerRangeStart &&
+          previousSamePlaMoveNumber <= rules.fkConfig.triggerRangeEnd;
+      }
+
+      if(isSecondManualPassForSickle && fkState.getSicklesRemaining(movePla) > 0) {
+        int configuredKnives = movePla == P_BLACK ? rules.fkConfig.blackKnifeCount : rules.fkConfig.whiteKnifeCount;
+        int& knivesRemaining = movePla == P_BLACK ? fkState.blackKnivesRemaining : fkState.whiteKnivesRemaining;
+        if(knivesRemaining < configuredKnives)
+          knivesRemaining++;
+        fkState.decrementSickles(movePla);
+      }
+      else if(fkState.getKnivesRemaining(movePla) > 0) {
+        fkState.decrementKnives(movePla);
+      }
+    }
+  }
+
   //Update recent boards
   currentRecentBoardIdx = (currentRecentBoardIdx + 1) % NUM_RECENT_BOARDS;
   recentBoards[currentRecentBoardIdx] = board;
@@ -1414,6 +1463,8 @@ int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla
     return 0;
   if(fkState.isInSequence())
     return 0;
+  if(moveNumber > 0 && moveHistory[moveNumber-1].loc == Board::PASS_LOC)
+    return 0;
 
   //Check if we're in the trigger range
   if(moveNumber < rules.fkConfig.triggerRangeStart || moveNumber > rules.fkConfig.triggerRangeEnd)
@@ -1426,10 +1477,11 @@ int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla
   if(totalAbilities == 0)
     return 0;
 
-  //Compute trigger probability based on remaining abilities and remaining range
+  //Sample without replacement over this player's remaining trigger opportunities.
+  //Do not mix both players here - only the player who just moved can trigger.
   int remainingRange = rules.fkConfig.triggerRangeEnd - moveNumber + 1;
-  //Probability: totalAbilities / (remainingRange + totalAbilities) -- gives reasonable distribution
-  double triggerProb = (double)totalAbilities / (double)(remainingRange + totalAbilities);
+  int remainingOpportunitiesForPla = remainingRange <= 0 ? 0 : 1 + (remainingRange - 1) / 2;
+  double triggerProb = remainingOpportunitiesForPla <= 0 ? 1.0 : std::min(1.0, (double)totalAbilities / (double)remainingOpportunitiesForPla);
   if(!rand.nextBool(triggerProb))
     return 0;
 
