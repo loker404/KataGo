@@ -865,12 +865,14 @@ static void iterLadders(const Board& board, int nnXLen, const std::function<void
   }
 }
 
-//Currently does NOT depend on history (except for marking ko-illegal spots)
+//Currently mostly does NOT depend on history, except for immediate ko/superko features
+//and any rules extensions that affect the legal state, such as flying knife state.
 Hash128 NNInputs::getHash(
   const Board& board, const BoardHistory& hist, Player nextPlayer,
   const MiscNNInputParams& nnInputParams
 ) {
   Hash128 hash = BoardHistory::getSituationRulesAndKoHash(board, hist, nextPlayer, nnInputParams.drawEquivalentWinsForWhite);
+  BoardHistory::mixFlyingKnifeStateHash(hist.rules,hist.fkState,hash);
 
   //Fold in whether a pass ends this phase.
   if(hist.passWouldEndPhase(board,nextPlayer)) {
