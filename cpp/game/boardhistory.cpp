@@ -342,7 +342,9 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
     std::fill(secondEncoreStartColors, secondEncoreStartColors+Board::MAX_ARR_SIZE, C_EMPTY);
 
   //Push hash for the new board state
-  koHashHistory.push_back(getKoHash(rules,board,pla,encorePhase,koRecapBlockHash));
+  Hash128 initialKoHash = getKoHash(rules,board,pla,encorePhase,koRecapBlockHash);
+  mixFlyingKnifeStateHash(rules,fkState,initialKoHash);
+  koHashHistory.push_back(initialKoHash);
 
   if(rules.scoringRule == Rules::SCORING_TERRITORY) {
     //Chill 1 point for every move played
@@ -1102,29 +1104,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   }
 
   Hash128 koHashAfterThisMove = getKoHash(rules,board,nextPlaAfterMove,encorePhase,koRecapBlockHash);
-  //Mix in flying knife state for position uniqueness
-  if(rules.fkConfig.isEnabled()) {
-    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
-    testAssert(fkState.abilityOwner >= 0 && fkState.abilityOwner <= 2);
-    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[fkState.abilityOwner];
-    //Mix in per-player ability counts so positions with different remaining abilities have distinct ko hashes
-    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT0 * (uint64_t)fkState.blackKnivesRemaining;
-    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT1 * (uint64_t)fkState.blackKnivesRemaining;
-    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT0 * (uint64_t)fkState.whiteKnivesRemaining;
-    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT1 * (uint64_t)fkState.whiteKnivesRemaining;
-    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT0 * (uint64_t)fkState.blackSicklesRemaining;
-    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 * (uint64_t)fkState.blackSicklesRemaining;
-    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 * (uint64_t)fkState.whiteSicklesRemaining;
-    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)fkState.whiteSicklesRemaining;
-    testAssert(fkState.manualPassPla >= 0 && fkState.manualPassPla <= 2);
-    koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[fkState.manualPassPla];
-    koHashAfterThisMove.hash0 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 * (uint64_t)fkState.manualPassMoveNumber;
-    koHashAfterThisMove.hash1 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 * (uint64_t)fkState.manualPassMoveNumber;
-    if(fkState.manualPassConsumedKnife)
-      koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
-    if(fkState.manualPassCanPairForSickle)
-      koHashAfterThisMove ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE;
-  }
+  mixFlyingKnifeStateHash(rules,fkState,koHashAfterThisMove);
   koHashHistory.push_back(koHashAfterThisMove);
   moveHistory.emplace_back(moveLoc,movePla);
   preventEncoreHistory.push_back(preventEncore);
@@ -1223,7 +1203,9 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
           koCapturesInEncore.clear();
 
           koHashHistory.clear();
-          koHashHistory.push_back(getKoHash(rules,board,getOpp(movePla),encorePhase,koRecapBlockHash));
+          Hash128 koHashAfterEncoreEnd = getKoHash(rules,board,getOpp(movePla),encorePhase,koRecapBlockHash);
+          mixFlyingKnifeStateHash(rules,fkState,koHashAfterEncoreEnd);
+          koHashHistory.push_back(koHashAfterEncoreEnd);
           //The first ko hash history is the one for the move we JUST appended to the move history earlier.
           firstTurnIdxWithKoHistory = moveHistory.size();
         }
@@ -1361,6 +1343,38 @@ Hash128 BoardHistory::getSituationRulesAndKoHash(const Board& board, const Board
   return hash;
 }
 
+void BoardHistory::mixFlyingKnifeStateHash(const Rules& rules, const FlyingKnifeState& fkState, Hash128& hash) {
+  if(!rules.fkConfig.isEnabled())
+    return;
+  hash ^= FlyingKnifeState::ZOBRIST_FK_REMAINING_MOVES[std::clamp(fkState.remainingMovesInSequence, 0, FlyingKnifeState::MAX_FK_SEQUENCE_MOVES)];
+  testAssert(fkState.abilityOwner >= 0 && fkState.abilityOwner <= 2);
+  hash ^= FlyingKnifeState::ZOBRIST_FK_ABILITY_OWNER[fkState.abilityOwner];
+  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT0 * (uint64_t)fkState.blackKnivesRemaining;
+  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_KNIVES_MULT1 * (uint64_t)fkState.blackKnivesRemaining;
+  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT0 * (uint64_t)fkState.whiteKnivesRemaining;
+  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_KNIVES_MULT1 * (uint64_t)fkState.whiteKnivesRemaining;
+  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT0 * (uint64_t)fkState.blackSicklesRemaining;
+  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_BLACK_SICKLES_MULT1 * (uint64_t)fkState.blackSicklesRemaining;
+  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT0 * (uint64_t)fkState.whiteSicklesRemaining;
+  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)fkState.whiteSicklesRemaining;
+  testAssert(fkState.manualPassPla >= 0 && fkState.manualPassPla <= 2);
+  hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[fkState.manualPassPla];
+  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 * (uint64_t)fkState.manualPassMoveNumber;
+  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 * (uint64_t)fkState.manualPassMoveNumber;
+  if(fkState.manualPassConsumedKnife)
+    hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
+  if(fkState.manualPassCanPairForSickle)
+    hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CAN_PAIR_FOR_SICKLE;
+}
+
+void BoardHistory::recomputeCurrentKoHash(const Board& board) {
+  testAssert(firstTurnIdxWithKoHistory + koHashHistory.size() == moveHistory.size() + 1);
+  testAssert(koHashHistory.size() > 0);
+  Hash128 koHash = getKoHash(rules,board,presumedNextMovePla,encorePhase,koRecapBlockHash);
+  mixFlyingKnifeStateHash(rules,fkState,koHash);
+  koHashHistory[koHashHistory.size()-1] = koHash;
+}
+
 
 
 KoHashTable::KoHashTable()
@@ -1477,7 +1491,7 @@ void BoardHistory::initFlyingKnifeState() {
   fkState.abilityOwner = C_EMPTY;
 }
 
-int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla) {
+int BoardHistory::checkAndActivateAbility(const Board& board, int moveNumber, Rand& rand, Player pla) {
   if(!rules.fkConfig.isEnabled())
     return 0;
   if(fkState.isInSequence())
@@ -1521,6 +1535,8 @@ int BoardHistory::checkAndActivateAbility(int moveNumber, Rand& rand, Player pla
   fkState.manualPassMoveNumber = 0;
   fkState.manualPassConsumedKnife = false;
   fkState.manualPassCanPairForSickle = false;
+  presumedNextMovePla = pla;
+  recomputeCurrentKoHash(board);
 
   return abilityType;
 }

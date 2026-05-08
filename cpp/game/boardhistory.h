@@ -182,7 +182,7 @@ struct BoardHistory {
   //Check and possibly activate a flying knife/sickle ability after a move.
   //Returns: 0=none, 2=knife activated, 3=sickle activated.
   //moveNumber is the current move count (number of moves already played).
-  int checkAndActivateAbility(int moveNumber, Rand& rand, Player pla);
+  int checkAndActivateAbility(const Board& board, int moveNumber, Rand& rand, Player pla);
   //Set overrideNumHandicapStones and update bonus points accordingly
   void setOverrideNumHandicapStones(int n);
 
@@ -258,6 +258,8 @@ struct BoardHistory {
   static Hash128 getSituationAndSimpleKoAndPrevPosHash(const Board& board, const BoardHistory& hist, Player nextPlayer);
   //Compute a hash that takes into account the full situation, the rules, discretized komi, and any immediate ko prohibitions.
   static Hash128 getSituationRulesAndKoHash(const Board& board, const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite);
+  static void mixFlyingKnifeStateHash(const Rules& rules, const FlyingKnifeState& fkState, Hash128& hash);
+  void recomputeCurrentKoHash(const Board& board);
 
 private:
   bool koHashOccursInHistory(Hash128 koHash, const KoHashTable* rootKoHashTable) const;

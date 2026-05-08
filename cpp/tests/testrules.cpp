@@ -5428,6 +5428,24 @@ Last moves pass pass pass pass H7 G9 F9 H7
   }
 
   {
+    Rules rules = Rules::getTrompTaylorish();
+    rules.fkConfig = FlyingKnifeConfig::fromString("start=1,end=1,bk=1,bs=0,wk=0,ws=0");
+    Board board(5,5);
+    BoardHistory hist(board,P_BLACK,rules,0);
+    Hash128 initialHash = hist.koHashHistory.back();
+    hist.makeBoardMoveAssumeLegal(board, Location::getLoc(0,0,board.x_size), P_BLACK, NULL);
+    Hash128 hashBeforeTrigger = hist.koHashHistory.back();
+    Rand rand("Flying knife forced trigger test");
+    int abilityType = hist.checkAndActivateAbility(board, (int)hist.moveHistory.size(), rand, P_BLACK);
+    testAssert(abilityType == FlyingKnifeConfig::getKnifeMoves());
+    testAssert(hist.presumedNextMovePla == P_BLACK);
+    testAssert(hist.fkState.remainingMovesInSequence == FlyingKnifeConfig::getKnifeMoves());
+    testAssert(hist.fkState.blackKnivesRemaining == 0);
+    testAssert(hist.koHashHistory.back() != hashBeforeTrigger);
+    testAssert(hist.koHashHistory[0] == initialHash);
+  }
+
+  {
     const char* name = "Rules parsing bug";
     Rules parsed = Rules::parseRules("komi23taxALL");
     out << parsed << endl;

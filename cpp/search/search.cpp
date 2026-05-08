@@ -215,6 +215,75 @@ void Search::setKomiIfNew(float newKomi) {
   }
 }
 
+bool Search::setFlyingKnifeState(Player pla, int remainingMoves, bool consumeAbility, std::string& error) {
+  if(!rootHistory.rules.fkConfig.isEnabled()) {
+    error = "Flying knife is not enabled in the current rules";
+    return false;
+  }
+  if(pla != P_BLACK && pla != P_WHITE) {
+    error = "Expected player B or W";
+    return false;
+  }
+  if(remainingMoves < 1 || remainingMoves > FlyingKnifeState::MAX_FK_SEQUENCE_MOVES) {
+    error = "Expected remaining moves in range 1..3";
+    return false;
+  }
+
+  FlyingKnifeState newState = rootHistory.fkState;
+  bool alreadyInRequestedState =
+    newState.remainingMovesInSequence == remainingMoves &&
+    newState.abilityOwner == pla;
+  if(consumeAbility && !alreadyInRequestedState) {
+    if(remainingMoves == FlyingKnifeConfig::getKnifeMoves()) {
+      if(newState.getKnivesRemaining(pla) <= 0) {
+        error = "No knife remains for that player";
+        return false;
+      }
+      newState.decrementKnives(pla);
+    }
+    else if(remainingMoves == FlyingKnifeConfig::getSickleMoves()) {
+      if(newState.getSicklesRemaining(pla) <= 0) {
+        error = "No sickle remains for that player";
+        return false;
+      }
+      newState.decrementSickles(pla);
+    }
+  }
+
+  clearSearch();
+  rootHistory.fkState = newState;
+  rootHistory.fkState.remainingMovesInSequence = remainingMoves;
+  rootHistory.fkState.abilityOwner = pla;
+  rootHistory.fkState.manualPassPla = C_EMPTY;
+  rootHistory.fkState.manualPassMoveNumber = 0;
+  rootHistory.fkState.manualPassConsumedKnife = false;
+  rootHistory.fkState.manualPassCanPairForSickle = false;
+  rootHistory.presumedNextMovePla = pla;
+  rootPla = pla;
+  rootHistory.recomputeCurrentKoHash(rootBoard);
+  rootKoHashTable->recompute(rootHistory);
+  rootGraphHash = GraphHash::getGraphHashFromScratch(
+    rootHistory, rootPla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+  );
+  return true;
+}
+
+void Search::clearFlyingKnifeState() {
+  clearSearch();
+  rootHistory.fkState.remainingMovesInSequence = 0;
+  rootHistory.fkState.abilityOwner = C_EMPTY;
+  rootHistory.fkState.manualPassPla = C_EMPTY;
+  rootHistory.fkState.manualPassMoveNumber = 0;
+  rootHistory.fkState.manualPassConsumedKnife = false;
+  rootHistory.fkState.manualPassCanPairForSickle = false;
+  rootHistory.presumedNextMovePla = rootPla;
+  rootHistory.recomputeCurrentKoHash(rootBoard);
+  rootKoHashTable->recompute(rootHistory);
+  rootGraphHash = GraphHash::getGraphHashFromScratch(
+    rootHistory, rootPla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+  );
+}
+
 void Search::setAvoidMoveUntilByLoc(const std::vector<int>& bVec, const std::vector<int>& wVec) {
   if(avoidMoveUntilByLocBlack == bVec && avoidMoveUntilByLocWhite == wVec)
     return;

@@ -49,6 +49,8 @@ static const vector<string> knownCommands = {
   //GTP extension - flying knife rules
   "kata-get-flying-knife",
   "kata-set-flying-knife",
+  "kata-get-flying-knife-state",
+  "kata-set-flying-knife-state",
 
   //Get or change a few limited params dynamically
   "kata-get-models",
@@ -1052,12 +1054,13 @@ struct GTPEngine {
       if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
         int moveNumber = (int)hist.moveHistory.size();
         if(!hist.fkState.isInSequence()) {
-          int abilityType = hist.checkAndActivateAbility(moveNumber, gtpRand, hist.moveHistory.back().pla);
+          int abilityType = hist.checkAndActivateAbility(search->rootBoard, moveNumber, gtpRand, hist.moveHistory.back().pla);
           if(abilityType > 0) {
             response += " # flying_knife " + Global::intToString(abilityType);
             logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
-            //rootPla was set to opponent by makeBoardMoveAssumeLegal, but same player continues
-            search->rootPla = hist.moveHistory.back().pla;
+            search->rootPla = hist.presumedNextMovePla;
+            search->rootKoHashTable->recompute(hist);
+            search->clearSearch();
           }
         }
       }
@@ -2478,6 +2481,84 @@ int MainCmds::gtp(const vector<string>& args) {
       catch(const IOError& err) {
         responseIsError = true;
         response = "Error parsing flying knife parameters: " + string(err.what());
+      }
+    }
+
+    else if(command == "kata-get-flying-knife-state") {
+      if(pieces.size() != 0) {
+        responseIsError = true;
+        response = "Expected no arguments for kata-get-flying-knife-state but got '" + Global::concat(pieces," ") + "'";
+      }
+      else {
+        Search* search = engine->bot->getSearchStopAndWait();
+        const FlyingKnifeState& state = search->rootHistory.fkState;
+        nlohmann::json ret;
+        ret["remainingMovesInSequence"] = state.remainingMovesInSequence;
+        ret["abilityOwner"] = state.abilityOwner == C_EMPTY ? string("none") : PlayerIO::playerToStringShort(state.abilityOwner);
+        ret["blackKnife"] = state.blackKnivesRemaining;
+        ret["blackSickle"] = state.blackSicklesRemaining;
+        ret["whiteKnife"] = state.whiteKnivesRemaining;
+        ret["whiteSickle"] = state.whiteSicklesRemaining;
+        ret["nextPlayer"] = PlayerIO::playerToStringShort(search->rootPla);
+        response = ret.dump();
+      }
+    }
+
+    else if(command == "kata-set-flying-knife-state") {
+      if(pieces.size() == 1 && (Global::toLower(pieces[0]) == "clear" || Global::toLower(pieces[0]) == "none")) {
+        Search* search = engine->bot->getSearchStopAndWait();
+        search->clearFlyingKnifeState();
+        response = "cleared";
+      }
+      else if(pieces.size() < 2 || pieces.size() > 3) {
+        responseIsError = true;
+        response = "Expected 'clear' or '<B/W> <knife|sickle|1|2|3> [consume|noconsume]'";
+      }
+      else {
+        Player pla;
+        if(!PlayerIO::tryParsePlayer(pieces[0], pla)) {
+          responseIsError = true;
+          response = "Could not parse player: " + pieces[0];
+        }
+        else {
+          string ability = Global::toLower(pieces[1]);
+          int remainingMoves = 0;
+          if(ability == "knife" || ability == "k")
+            remainingMoves = FlyingKnifeConfig::getKnifeMoves();
+          else if(ability == "sickle" || ability == "s")
+            remainingMoves = FlyingKnifeConfig::getSickleMoves();
+          else if(!Global::tryStringToInt(ability, remainingMoves)) {
+            responseIsError = true;
+            response = "Could not parse ability or remaining move count: " + pieces[1];
+          }
+
+          bool consumeAbility = true;
+          if(!responseIsError && pieces.size() == 3) {
+            string mode = Global::toLower(pieces[2]);
+            if(mode == "consume")
+              consumeAbility = true;
+            else if(mode == "noconsume" || mode == "no-consume")
+              consumeAbility = false;
+            else {
+              responseIsError = true;
+              response = "Expected optional mode consume or noconsume, got: " + pieces[2];
+            }
+          }
+
+          if(!responseIsError) {
+            Search* search = engine->bot->getSearchStopAndWait();
+            string error;
+            bool suc = search->setFlyingKnifeState(pla, remainingMoves, consumeAbility, error);
+            if(!suc) {
+              responseIsError = true;
+              response = error;
+            }
+            else {
+              response = PlayerIO::playerToStringShort(pla) + string(" ") + Global::intToString(remainingMoves);
+              logger.write("Changed flying knife state to " + response);
+            }
+          }
+        }
       }
     }
 
