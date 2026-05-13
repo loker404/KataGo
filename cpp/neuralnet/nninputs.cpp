@@ -1288,7 +1288,6 @@ void NNInputs::fillRowV3(
 
 }
 
-
 //===========================================================================================
 //INPUTSVERSION 4
 //===========================================================================================
@@ -2715,4 +2714,83 @@ void NNInputs::fillRowV7(
     rowGlobal[18] = wave;
   }
 
+}
+
+//===========================================================================================
+//INPUTSVERSION 8
+//===========================================================================================
+
+static int countFlyingKnifeTriggerOpportunities(
+  const BoardHistory& hist,
+  int firstMoveNumber,
+  Player firstPla,
+  Player targetPla
+) {
+  int count = 0;
+  Player pla = firstPla;
+  for(int moveNumber = firstMoveNumber; moveNumber <= hist.rules.fkConfig.triggerRangeEnd; moveNumber++) {
+    if(moveNumber >= hist.rules.fkConfig.triggerRangeStart && pla == targetPla)
+      count++;
+    pla = getOpp(pla);
+  }
+  return count;
+}
+
+static float normalizeFlyingKnifeCount(int count, int initialCount) {
+  return initialCount <= 0 ? 0.0f : (float)count / (float)initialCount;
+}
+
+// V8 appends fourteen global features to V7:
+// enabled, in-sequence, self/opp sequence moves, self/opp knife and sickle counts,
+// self/opp remaining trigger opportunities, and self/opp manual pass pairing state.
+static void fillFlyingKnifeGlobalFeaturesV8(const BoardHistory& hist, Player nextPlayer, float* rowGlobal) {
+  const int base = NNInputs::NUM_FEATURES_GLOBAL_V7;
+  const FlyingKnifeConfig& config = hist.rules.fkConfig;
+  if(!config.isEnabled())
+    return;
+
+  Player pla = nextPlayer;
+  Player opp = getOpp(pla);
+  const FlyingKnifeState& state = hist.fkState;
+
+  rowGlobal[base + 0] = 1.0f;
+  rowGlobal[base + 1] = state.isInSequence() ? 1.0f : 0.0f;
+  rowGlobal[base + 2] = state.abilityOwner == pla ? (float)state.remainingMovesInSequence / (float)FlyingKnifeState::MAX_FK_SEQUENCE_MOVES : 0.0f;
+  rowGlobal[base + 3] = state.abilityOwner == opp ? (float)state.remainingMovesInSequence / (float)FlyingKnifeState::MAX_FK_SEQUENCE_MOVES : 0.0f;
+
+  int plaKnifeInitial = pla == P_BLACK ? config.blackKnifeCount : config.whiteKnifeCount;
+  int plaSickleInitial = pla == P_BLACK ? config.blackSickleCount : config.whiteSickleCount;
+  int oppKnifeInitial = opp == P_BLACK ? config.blackKnifeCount : config.whiteKnifeCount;
+  int oppSickleInitial = opp == P_BLACK ? config.blackSickleCount : config.whiteSickleCount;
+  rowGlobal[base + 4] = normalizeFlyingKnifeCount(state.getKnivesRemaining(pla), plaKnifeInitial);
+  rowGlobal[base + 5] = normalizeFlyingKnifeCount(state.getSicklesRemaining(pla), plaSickleInitial);
+  rowGlobal[base + 6] = normalizeFlyingKnifeCount(state.getKnivesRemaining(opp), oppKnifeInitial);
+  rowGlobal[base + 7] = normalizeFlyingKnifeCount(state.getSicklesRemaining(opp), oppSickleInitial);
+
+  if(!state.isInSequence()) {
+    int nextMoveNumber = (int)hist.moveHistory.size() + 1;
+    int plaTotalOpps = countFlyingKnifeTriggerOpportunities(hist, 1, hist.initialPla, pla);
+    int oppTotalOpps = countFlyingKnifeTriggerOpportunities(hist, 1, hist.initialPla, opp);
+    int plaRemainingOpps = countFlyingKnifeTriggerOpportunities(hist, nextMoveNumber, nextPlayer, pla);
+    int oppRemainingOpps = countFlyingKnifeTriggerOpportunities(hist, nextMoveNumber, nextPlayer, opp);
+    rowGlobal[base + 8] = plaTotalOpps <= 0 ? 0.0f : (float)plaRemainingOpps / (float)plaTotalOpps;
+    rowGlobal[base + 9] = oppTotalOpps <= 0 ? 0.0f : (float)oppRemainingOpps / (float)oppTotalOpps;
+  }
+
+  bool plaManualPassPending = state.manualPassCanPairForSickle && state.manualPassPla == pla;
+  bool oppManualPassPending = state.manualPassCanPairForSickle && state.manualPassPla == opp;
+  rowGlobal[base + 10] = plaManualPassPending ? 1.0f : 0.0f;
+  rowGlobal[base + 11] = oppManualPassPending ? 1.0f : 0.0f;
+  rowGlobal[base + 12] = plaManualPassPending && state.manualPassConsumedKnife ? 1.0f : 0.0f;
+  rowGlobal[base + 13] = oppManualPassPending && state.manualPassConsumedKnife ? 1.0f : 0.0f;
+}
+
+void NNInputs::fillRowV8(
+  const Board& board, const BoardHistory& hist, Player nextPlayer,
+  const MiscNNInputParams& nnInputParams,
+  int nnXLen, int nnYLen, bool useNHWC, float* rowBin, float* rowGlobal
+) {
+  fillRowV7(board,hist,nextPlayer,nnInputParams,nnXLen,nnYLen,useNHWC,rowBin,rowGlobal);
+  std::fill(rowGlobal+NUM_FEATURES_GLOBAL_V7,rowGlobal+NUM_FEATURES_GLOBAL_V8,0.0f);
+  fillFlyingKnifeGlobalFeaturesV8(hist,nextPlayer,rowGlobal);
 }

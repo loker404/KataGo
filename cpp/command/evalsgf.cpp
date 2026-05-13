@@ -673,7 +673,22 @@ int MainCmds::evalsgf(const vector<string>& args) {
       MiscNNInputParams nnInputParams;
       nnInputParams.symmetry = 0;
       nnInputParams.policyOptimism = params.rootPolicyOptimism;
-      NNInputs::fillRowV7(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      int inputsVersion = NNModelVersion::getInputsVersion(modelVersion);
+      static_assert(NNModelVersion::latestInputsVersionImplemented == 8, "");
+      if(inputsVersion == 3)
+        NNInputs::fillRowV3(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else if(inputsVersion == 4)
+        NNInputs::fillRowV4(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else if(inputsVersion == 5)
+        NNInputs::fillRowV5(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else if(inputsVersion == 6)
+        NNInputs::fillRowV6(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else if(inputsVersion == 7)
+        NNInputs::fillRowV7(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else if(inputsVersion == 8)
+        NNInputs::fillRowV8(board, hist, nextPla, nnInputParams, nnXLen, nnYLen, inputsUseNHWC, binaryInputNCHW.data, globalInputNC.data);
+      else
+        ASSERT_UNREACHABLE;
 
       ZipFile zipFile(dumpNpzInputTo);
       uint64_t numBytes;

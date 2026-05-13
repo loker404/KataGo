@@ -248,6 +248,12 @@ bool Search::setFlyingKnifeState(Player pla, int remainingMoves, bool consumeAbi
       }
       newState.decrementSickles(pla);
     }
+    else {
+      error = "Cannot consume ability: remainingMoves must be " +
+        std::to_string(FlyingKnifeConfig::getKnifeMoves()) + " (knife) or " +
+        std::to_string(FlyingKnifeConfig::getSickleMoves()) + " (sickle)";
+      return false;
+    }
   }
 
   clearSearch();
