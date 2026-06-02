@@ -73,6 +73,9 @@ bool Search::getPlaySelectionValues(
   if(retVisitCounts != NULL)
     retVisitCounts->clear();
 
+  if(node.isChanceNode)
+    return false;
+
   const NNOutput* nnOutput = node.getNNOutput();
   const float* policyProbs = nnOutput != NULL ? nnOutput->getPolicyProbsMaybeNoised() : NULL;
 
@@ -1037,6 +1040,9 @@ void Search::getAnalysisData(
   const SearchNode& node, vector<AnalysisData>& buf, int minMovesToTryToGet, bool includeWeightFactors, int maxPVDepth, bool duplicateForSymmetries
 ) const {
   buf.clear();
+  if(node.isChanceNode || node.getNNOutput() == NULL)
+    return;
+
   vector<const SearchNode*> children;
   vector<int64_t> childrenEdgeVisits;
   vector<Loc> childrenMoveLocs;
@@ -1252,7 +1258,7 @@ void Search::printPVForMove(ostream& out, const SearchNode* n, Loc move, int max
   vector<int64_t> edgeVisitsBuf;
   vector<Loc> scratchLocs;
   vector<double> scratchValues;
-    appendPVForMove(buf,NULL,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,move,maxDepth);
+  appendPVForMove(buf,NULL,visitsBuf,edgeVisitsBuf,scratchLocs,scratchValues,n,move,maxDepth);
   for(int i = 0; i<buf.size(); i++) {
     if(i > 0)
       out << " ";

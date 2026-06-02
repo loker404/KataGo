@@ -1042,8 +1042,8 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   // markers for UI-driven consecutive play. One pass consumes a knife. Two
   // passes by the same player with exactly one intervening opponent move are
   // combined into a sickle, refunding the first knife if it was consumed.
+  int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
   if(moveLoc == Board::PASS_LOC && rules.fkConfig.isEnabled() && !fkState.isInSequence()) {
-    int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
     if(moveNumberAfterThisMove >= rules.fkConfig.triggerRangeStart &&
        moveNumberAfterThisMove <= rules.fkConfig.triggerRangeEnd) {
       bool isSecondManualPassForSickle =
@@ -1076,12 +1076,11 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
         fkState.manualPassPla = movePla;
         fkState.manualPassMoveNumber = moveNumberAfterThisMove;
         fkState.manualPassConsumedKnife = false;
-        fkState.manualPassCanPairForSickle = true;
+        fkState.manualPassCanPairForSickle = fkState.getSicklesRemaining(movePla) > 0;
       }
     }
   }
 
-  int moveNumberAfterThisMove = (int)moveHistory.size() + 1;
   if(fkState.manualPassCanPairForSickle && fkState.manualPassMoveNumber < moveNumberAfterThisMove - 1) {
     fkState.manualPassPla = C_EMPTY;
     fkState.manualPassMoveNumber = 0;

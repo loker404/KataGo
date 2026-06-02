@@ -2,6 +2,121 @@
 #include <algorithm>
 #include "../core/test.h"
 
+static bool canDecomposeFlyingKnifeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles);
+
+static bool canDecomposeAfterFlyingKnifeAbility(
+  int extraMoves,
+  int remainingMovesAtEnd,
+  int abilityMoves,
+  int knives,
+  int sickles
+) {
+  if(extraMoves < abilityMoves)
+    return remainingMovesAtEnd == abilityMoves - extraMoves;
+  return canDecomposeFlyingKnifeRun(extraMoves - abilityMoves, remainingMovesAtEnd, knives, sickles);
+}
+
+static bool canDecomposeFlyingKnifeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles) {
+  if(extraMoves < 0)
+    return false;
+  if(extraMoves == 0) {
+    if(remainingMovesAtEnd == 0)
+      return true;
+    if(knives > 0 && remainingMovesAtEnd == FlyingKnifeConfig::getKnifeMoves())
+      return true;
+    if(sickles > 0 && remainingMovesAtEnd == FlyingKnifeConfig::getSickleMoves())
+      return true;
+    return false;
+  }
+  if(knives > 0 && canDecomposeAfterFlyingKnifeAbility(
+    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles
+  ))
+    return true;
+  if(sickles > 0 && canDecomposeAfterFlyingKnifeAbility(
+    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1
+  ))
+    return true;
+  return false;
+}
+
+static bool shouldApplyFlyingKnifeChanceTransition(const BoardHistory& hist) {
+  const FlyingKnifeConfig& fkConfig = hist.rules.fkConfig;
+  if(!fkConfig.isEnabled())
+    return false;
+  if(hist.fkState.isInSequence())
+    return false;
+
+  int moveNumber = (int)hist.moveHistory.size();
+  if(moveNumber <= 0)
+    return false;
+  if(hist.moveHistory[moveNumber-1].loc == Board::PASS_LOC)
+    return false;
+  if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
+    return false;
+
+  Player pla = hist.moveHistory[moveNumber-1].pla;
+  return hist.fkState.getKnivesRemaining(pla) + hist.fkState.getSicklesRemaining(pla) > 0;
+}
+
+static int inferFlyingKnifeAbilityMoves(
+  const BoardHistory& histOrig,
+  const BoardHistory& hist,
+  int turnIdx
+) {
+  const std::vector<Move>& moves = histOrig.moveHistory;
+  Player pla = moves[turnIdx].pla;
+
+  int extraMoves = 0;
+  for(int i = turnIdx+1; i<moves.size() && moves[i].pla == pla; i++)
+    extraMoves++;
+
+  int remainingMovesAtEnd = 0;
+  if(turnIdx + 1 + extraMoves >= moves.size() &&
+     histOrig.fkState.isInSequence() &&
+     histOrig.fkState.abilityOwner == pla)
+    remainingMovesAtEnd = histOrig.fkState.remainingMovesInSequence;
+
+  int knives = hist.fkState.getKnivesRemaining(pla);
+  int sickles = hist.fkState.getSicklesRemaining(pla);
+  if(knives > 0 && canDecomposeAfterFlyingKnifeAbility(
+    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles
+  ))
+    return FlyingKnifeConfig::getKnifeMoves();
+  if(sickles > 0 && canDecomposeAfterFlyingKnifeAbility(
+    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1
+  ))
+    return FlyingKnifeConfig::getSickleMoves();
+  return 0;
+}
+
+static bool maybeApplyInferredFlyingKnifeChanceTransition(
+  const BoardHistory& histOrig,
+  int turnIdx,
+  const Board& board,
+  BoardHistory& hist
+) {
+  if(!shouldApplyFlyingKnifeChanceTransition(hist))
+    return false;
+
+  Player pla = hist.moveHistory[hist.moveHistory.size()-1].pla;
+  int abilityMoves = inferFlyingKnifeAbilityMoves(histOrig, hist, turnIdx);
+  if(abilityMoves > 0) {
+    if(abilityMoves == FlyingKnifeConfig::getKnifeMoves())
+      hist.fkState.decrementKnives(pla);
+    else
+      hist.fkState.decrementSickles(pla);
+    hist.fkState.remainingMovesInSequence = abilityMoves;
+    hist.fkState.abilityOwner = pla;
+    hist.fkState.manualPassPla = C_EMPTY;
+    hist.fkState.manualPassMoveNumber = 0;
+    hist.fkState.manualPassConsumedKnife = false;
+    hist.fkState.manualPassCanPairForSickle = false;
+    hist.presumedNextMovePla = pla;
+    hist.recomputeCurrentKoHash(board);
+  }
+  return true;
+}
+
 Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite) {
   const Board& board = hist.getRecentBoard(0);
   Hash128 hash = BoardHistory::getSituationRulesAndKoHash(board, hist, nextPlayer, drawEquivalentWinsForWhite);
@@ -47,17 +162,35 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
   Board board = hist.getRecentBoard(0);
   Hash128 graphHash = Hash128();
 
+  Player initialNextPlayer = histOrig.moveHistory.size() <= 0 ? nextPlayer : histOrig.moveHistory[0].pla;
+  graphHash = getGraphHash(graphHash, hist, initialNextPlayer, repBound, drawEquivalentWinsForWhite);
+
   for(size_t i = 0; i<histOrig.moveHistory.size(); i++) {
-    graphHash = getGraphHash(graphHash, hist, histOrig.moveHistory[i].pla, repBound, drawEquivalentWinsForWhite);
     bool suc = hist.makeBoardMoveTolerant(board, histOrig.moveHistory[i].loc, histOrig.moveHistory[i].pla, histOrig.preventEncoreHistory[i]);
     testAssert(suc);
+    Player actualNextPlayer = i+1 < histOrig.moveHistory.size() ? histOrig.moveHistory[i+1].pla : nextPlayer;
+    bool hasChanceTransition = shouldApplyFlyingKnifeChanceTransition(hist);
+    graphHash = getGraphHash(
+      graphHash, hist, hasChanceTransition ? hist.presumedNextMovePla : actualNextPlayer,
+      repBound, drawEquivalentWinsForWhite
+    );
+    if(hasChanceTransition) {
+      maybeApplyInferredFlyingKnifeChanceTransition(histOrig, (int)i, board, hist);
+      graphHash = getGraphHash(graphHash, hist, hist.fkState.isInSequence() ? hist.presumedNextMovePla : actualNextPlayer, repBound, drawEquivalentWinsForWhite);
+    }
+  }
+
+  if(hist.fkState != histOrig.fkState || hist.presumedNextMovePla != nextPlayer) {
+    hist.fkState = histOrig.fkState;
+    hist.presumedNextMovePla = nextPlayer;
+    hist.recomputeCurrentKoHash(board);
+    graphHash = getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite);
   }
   testAssert(
-    BoardHistory::getSituationRulesAndKoHash(board, hist, nextPlayer, drawEquivalentWinsForWhite) ==
-    BoardHistory::getSituationRulesAndKoHash(histOrig.getRecentBoard(0), histOrig, nextPlayer, drawEquivalentWinsForWhite)
+    getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite) ==
+    getStateHash(histOrig, nextPlayer, drawEquivalentWinsForWhite)
   );
 
-  graphHash = getGraphHash(graphHash, hist, nextPlayer, repBound, drawEquivalentWinsForWhite);
   return graphHash;
 }
 

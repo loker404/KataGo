@@ -2726,6 +2726,9 @@ static int countFlyingKnifeTriggerOpportunities(
   Player firstPla,
   Player targetPla
 ) {
+  // Approximate future opportunities by alternating players from the current player.
+  // Actual flying-knife triggers can create consecutive turns, so this is a stable
+  // countdown-style feature rather than an exact rollout of future trigger chances.
   int count = 0;
   Player pla = firstPla;
   for(int moveNumber = firstMoveNumber; moveNumber <= hist.rules.fkConfig.triggerRangeEnd; moveNumber++) {

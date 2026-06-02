@@ -1051,6 +1051,7 @@ struct GTPEngine {
       //Check for flying knife trigger after the move
       Search* search = bot->getSearchStopAndWait();
       BoardHistory& hist = search->rootHistory;
+      bool shouldClearSearchForFlyingKnife = false;
       if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
         int moveNumber = (int)hist.moveHistory.size();
         if(!hist.fkState.isInSequence()) {
@@ -1060,12 +1061,14 @@ struct GTPEngine {
             logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
             search->rootPla = hist.presumedNextMovePla;
             search->rootKoHashTable->recompute(hist);
-            search->clearSearch();
+            shouldClearSearchForFlyingKnife = true;
           }
         }
       }
 
       printGTPResponse(response,responseIsError);
+      if(shouldClearSearchForFlyingKnife)
+        search->clearSearch();
       maybeStartPondering = true;
     }
     else {
