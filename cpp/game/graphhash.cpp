@@ -1,6 +1,8 @@
 #include "../game/graphhash.h"
 #include "../core/test.h"
 
+static const Hash128 FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH = Hash128(0xf0cae71c9a22b55dULL,0x5f674c38406b8e19ULL);
+
 static bool shouldApplyFlyingKnifeChanceTransition(const BoardHistory& hist) {
   const FlyingKnifeConfig& fkConfig = hist.rules.fkConfig;
   if(!fkConfig.isEnabled())
@@ -142,11 +144,16 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
   if(hist.fkState != histOrig.fkState || hist.presumedNextMovePla != nextPlayer) {
     // Histories with externally forced FK state, or ambiguous consecutive-run
     // decompositions, cannot always be uniquely reconstructed from moveHistory
-    // alone. In those cases, fall back to the exact current state hash.
+    // alone. In those cases, mix in the exact current state while preserving
+    // the replayed graph hash's path dependence.
     hist.fkState = histOrig.fkState;
     hist.presumedNextMovePla = nextPlayer;
     hist.recomputeCurrentKoHash(board);
-    graphHash = getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite);
+    graphHash.hash0 = Hash::splitMix64(graphHash.hash0 ^ graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash0);
+    graphHash.hash1 = Hash::nasam(graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash1) + graphHash.hash0;
+    Hash128 stateHash = getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite);
+    graphHash.hash0 += stateHash.hash0;
+    graphHash.hash1 += stateHash.hash1;
   }
   testAssert(
     getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite) ==

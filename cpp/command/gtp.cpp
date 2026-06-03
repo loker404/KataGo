@@ -1057,7 +1057,6 @@ struct GTPEngine {
         if(moveNumber > 0 && !hist.fkState.isInSequence()) {
           int abilityType = hist.checkAndActivateAbility(search->rootBoard, moveNumber, gtpRand, hist.moveHistory.back().pla);
           if(abilityType > 0) {
-            response += " # flying_knife " + Global::intToString(abilityType);
             logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
             search->rootPla = hist.presumedNextMovePla;
             search->rootKoHashTable->recompute(hist);

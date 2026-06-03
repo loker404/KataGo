@@ -97,7 +97,7 @@ int MainCmds::selfplay(const vector<string>& args) {
   const int inputsVersion =
     cfg.contains("inputsVersion") ?
     cfg.getInt("inputsVersion",NNModelVersion::oldestInputsVersionImplemented,NNModelVersion::latestInputsVersionImplemented) :
-    NNModelVersion::latestInputsVersionImplemented;
+    NNModelVersion::getInputsVersion(NNModelVersion::defaultModelVersion);
   //Max number of games that we will allow to be queued up and not written out
   const int maxDataQueueSize = cfg.getInt("maxDataQueueSize",1,1000000);
   const int maxRowsPerTrainFile = cfg.getInt("maxRowsPerTrainFile",1,100000000);
