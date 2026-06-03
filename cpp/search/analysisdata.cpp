@@ -246,12 +246,12 @@ int AnalysisData::getPVLenUpToPhaseEnd(const Board& initialBoard, const BoardHis
   Player nextPla = initialPla;
   int j;
   for(j = 0; j<pv.size(); j++) {
-    if(isVirtualPVPass(pvIsVirtualPass,j))
-      continue;
-    hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+    if(!isVirtualPVPass(pvIsVirtualPass,j)) {
+      hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+      if(hist.encorePhase != initialHist.encorePhase)
+        break;
+    }
     nextPla = getOpp(nextPla);
-    if(hist.encorePhase != initialHist.encorePhase)
-      break;
   }
   return j;
 }
@@ -265,12 +265,12 @@ void AnalysisData::writePVUpToPhaseEnd(std::ostream& out, const Board& initialBo
       out << " ";
     out << Location::toString(pv[j],board);
 
-    if(isVirtualPVPass(pvIsVirtualPass,j))
-      continue;
-    hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+    if(!isVirtualPVPass(pvIsVirtualPass,j)) {
+      hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+      if(hist.encorePhase != initialHist.encorePhase)
+        break;
+    }
     nextPla = getOpp(nextPla);
-    if(hist.encorePhase != initialHist.encorePhase)
-      break;
   }
 }
 
@@ -284,12 +284,12 @@ void AnalysisData::writePVVisitsUpToPhaseEnd(std::ostream& out, const Board& ini
       out << " ";
     out << pvVisits[j];
 
-    if(isVirtualPVPass(pvIsVirtualPass,j))
-      continue;
-    hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+    if(!isVirtualPVPass(pvIsVirtualPass,j)) {
+      hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+      if(hist.encorePhase != initialHist.encorePhase)
+        break;
+    }
     nextPla = getOpp(nextPla);
-    if(hist.encorePhase != initialHist.encorePhase)
-      break;
   }
 }
 
@@ -303,11 +303,11 @@ void AnalysisData::writePVEdgeVisitsUpToPhaseEnd(std::ostream& out, const Board&
       out << " ";
     out << pvEdgeVisits[j];
 
-    if(isVirtualPVPass(pvIsVirtualPass,j))
-      continue;
-    hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+    if(!isVirtualPVPass(pvIsVirtualPass,j)) {
+      hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
+      if(hist.encorePhase != initialHist.encorePhase)
+        break;
+    }
     nextPla = getOpp(nextPla);
-    if(hist.encorePhase != initialHist.encorePhase)
-      break;
   }
 }
