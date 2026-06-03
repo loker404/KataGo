@@ -680,6 +680,9 @@ int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   int totalAbilities = knives + sickles;
+  testAssert(totalAbilities > 0);
+  if(totalAbilities <= 0)
+    return 0;
   double r = thread.rand.nextDouble();
   if(r >= triggerProb) {
     return 0; // No trigger

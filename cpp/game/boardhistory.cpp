@@ -1358,8 +1358,10 @@ void BoardHistory::mixFlyingKnifeStateHash(const Rules& rules, const FlyingKnife
   hash.hash1 += FlyingKnifeState::ZOBRIST_FK_WHITE_SICKLES_MULT1 * (uint64_t)fkState.whiteSicklesRemaining;
   testAssert(fkState.manualPassPla >= 0 && fkState.manualPassPla <= 2);
   hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_PLA[fkState.manualPassPla];
-  hash.hash0 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0 * (uint64_t)fkState.manualPassMoveNumber;
-  hash.hash1 += FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1 * (uint64_t)fkState.manualPassMoveNumber;
+  uint64_t manualPassMoveNumberHash =
+    Hash::murmurMix((uint64_t)fkState.manualPassMoveNumber ^ FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT0);
+  hash.hash0 ^= manualPassMoveNumberHash;
+  hash.hash1 ^= Hash::basicLCong(manualPassMoveNumberHash ^ FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_MOVE_NUMBER_MULT1);
   if(fkState.manualPassConsumedKnife)
     hash ^= FlyingKnifeState::ZOBRIST_FK_MANUAL_PASS_CONSUMED_KNIFE;
   if(fkState.manualPassCanPairForSickle)

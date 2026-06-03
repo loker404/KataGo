@@ -2779,6 +2779,10 @@ static void fillFlyingKnifeGlobalFeaturesV8(const BoardHistory& hist, Player nex
     rowGlobal[base + 8] = plaTotalOpps <= 0 ? 0.0f : (float)plaRemainingOpps / (float)plaTotalOpps;
     rowGlobal[base + 9] = oppTotalOpps <= 0 ? 0.0f : (float)oppRemainingOpps / (float)oppTotalOpps;
   }
+  else {
+    rowGlobal[base + 8] = 0.0f;
+    rowGlobal[base + 9] = 0.0f;
+  }
 
   bool plaManualPassPending = state.manualPassCanPairForSickle && state.manualPassPla == pla;
   bool oppManualPassPending = state.manualPassCanPairForSickle && state.manualPassPla == opp;

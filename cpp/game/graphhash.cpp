@@ -2,7 +2,39 @@
 #include <algorithm>
 #include "../core/test.h"
 
-static bool canDecomposeFlyingKnifeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles);
+static bool canDecomposeAfterFlyingKnifeAbility(
+  int extraMoves,
+  int remainingMovesAtEnd,
+  int abilityMoves,
+  int knives,
+  int sickles
+);
+
+static bool canDecomposeFlyingKnifeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles) {
+  if(extraMoves < 0)
+    return false;
+  for(int knivesUsed = 0; knivesUsed <= knives; knivesUsed++) {
+    for(int sicklesUsed = 0; sicklesUsed <= sickles; sicklesUsed++) {
+      int fullAbilityMoves =
+        knivesUsed * FlyingKnifeConfig::getKnifeMoves() +
+        sicklesUsed * FlyingKnifeConfig::getSickleMoves();
+
+      if(remainingMovesAtEnd == 0 && fullAbilityMoves == extraMoves)
+        return true;
+      if(remainingMovesAtEnd > 0 &&
+         remainingMovesAtEnd <= FlyingKnifeConfig::getKnifeMoves() &&
+         knivesUsed < knives &&
+         fullAbilityMoves + (FlyingKnifeConfig::getKnifeMoves() - remainingMovesAtEnd) == extraMoves)
+        return true;
+      if(remainingMovesAtEnd > 0 &&
+         remainingMovesAtEnd <= FlyingKnifeConfig::getSickleMoves() &&
+         sicklesUsed < sickles &&
+         fullAbilityMoves + (FlyingKnifeConfig::getSickleMoves() - remainingMovesAtEnd) == extraMoves)
+        return true;
+    }
+  }
+  return false;
+}
 
 static bool canDecomposeAfterFlyingKnifeAbility(
   int extraMoves,
@@ -14,29 +46,6 @@ static bool canDecomposeAfterFlyingKnifeAbility(
   if(extraMoves < abilityMoves)
     return remainingMovesAtEnd == abilityMoves - extraMoves;
   return canDecomposeFlyingKnifeRun(extraMoves - abilityMoves, remainingMovesAtEnd, knives, sickles);
-}
-
-static bool canDecomposeFlyingKnifeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles) {
-  if(extraMoves < 0)
-    return false;
-  if(extraMoves == 0) {
-    if(remainingMovesAtEnd == 0)
-      return true;
-    if(knives > 0 && remainingMovesAtEnd == FlyingKnifeConfig::getKnifeMoves())
-      return true;
-    if(sickles > 0 && remainingMovesAtEnd == FlyingKnifeConfig::getSickleMoves())
-      return true;
-    return false;
-  }
-  if(knives > 0 && canDecomposeAfterFlyingKnifeAbility(
-    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles
-  ))
-    return true;
-  if(sickles > 0 && canDecomposeAfterFlyingKnifeAbility(
-    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1
-  ))
-    return true;
-  return false;
 }
 
 static bool shouldApplyFlyingKnifeChanceTransition(const BoardHistory& hist) {
@@ -181,6 +190,9 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
   }
 
   if(hist.fkState != histOrig.fkState || hist.presumedNextMovePla != nextPlayer) {
+    // Histories with externally forced FK state, or ambiguous consecutive-run
+    // decompositions, cannot always be uniquely reconstructed from moveHistory
+    // alone. In those cases, fall back to the exact current state hash.
     hist.fkState = histOrig.fkState;
     hist.presumedNextMovePla = nextPlayer;
     hist.recomputeCurrentKoHash(board);
