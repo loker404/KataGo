@@ -188,7 +188,9 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
       continue;
 
     double childUtility = stats.stats.utilityAvg;
-    //Chance nodes don't flip utility - both children serve the same player's perspective
+    // utilityAvg is always stored from White's perspective. For chance nodes,
+    // child values can be averaged directly; selfUtility is only for value-based
+    // child weighting, which chance nodes currently do not use for move choice.
     if(node.isChanceNode)
       stats.selfUtility = childUtility;
     else

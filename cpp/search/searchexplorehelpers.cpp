@@ -772,6 +772,17 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
      thread.history.flyingKnifeTriggerHistory.size() > 0)
     savedFlyingKnifeTrigger = thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1];
 
+  auto restoreThreadState = [&]() {
+    thread.history.fkState = savedFkState;
+    thread.graphHash = savedGraphHash;
+    thread.pla = savedPla;
+    thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+    if(savedCurrentKoHashValid)
+      thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
+    if(savedFlyingKnifeTrigger >= 0)
+      thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
+  };
+
   //Check if the selected child already exists
   SearchNode* child = children[chanceChild].getIfAllocated();
   if(child != NULL) {
@@ -797,14 +808,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     child->virtualLosses.fetch_add(-1, std::memory_order_release);
 
     //Restore thread state
-    thread.history.fkState = savedFkState;
-    thread.graphHash = savedGraphHash;
-    thread.pla = savedPla;
-    thread.history.presumedNextMovePla = savedPresumedNextMovePla;
-    if(savedCurrentKoHashValid)
-      thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
-    if(savedFlyingKnifeTrigger >= 0)
-      thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
+    restoreThreadState();
 
     return shouldUpdateChildAncestors;
   }
@@ -828,14 +832,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     } else {
       child->virtualLosses.fetch_add(-1, std::memory_order_release);
       thread.shouldCountPlayout = false;
-      thread.history.fkState = savedFkState;
-      thread.graphHash = savedGraphHash;
-      thread.pla = savedPla;
-      thread.history.presumedNextMovePla = savedPresumedNextMovePla;
-      if(savedCurrentKoHashValid)
-        thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
-      if(savedFlyingKnifeTrigger >= 0)
-        thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
+      restoreThreadState();
       return false;
     }
   }
@@ -853,14 +850,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   child->virtualLosses.fetch_add(-1, std::memory_order_release);
 
   //Restore thread state
-  thread.history.fkState = savedFkState;
-  thread.graphHash = savedGraphHash;
-  thread.pla = savedPla;
-  thread.history.presumedNextMovePla = savedPresumedNextMovePla;
-  if(savedCurrentKoHashValid)
-    thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
-  if(savedFlyingKnifeTrigger >= 0)
-    thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
+  restoreThreadState();
 
   return shouldUpdateChildAncestors;
 }
