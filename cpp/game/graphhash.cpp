@@ -98,7 +98,7 @@ static int inferFlyingKnifeAbilityMoves(
   return 0;
 }
 
-static bool maybeApplyInferredFlyingKnifeChanceTransition(
+static bool maybeApplyInferredFlyingKnifeChanceTrigger(
   const BoardHistory& histOrig,
   int turnIdx,
   const Board& board,
@@ -109,20 +109,21 @@ static bool maybeApplyInferredFlyingKnifeChanceTransition(
 
   Player pla = hist.moveHistory[hist.moveHistory.size()-1].pla;
   int abilityMoves = inferFlyingKnifeAbilityMoves(histOrig, hist, turnIdx);
-  if(abilityMoves > 0) {
-    if(abilityMoves == FlyingKnifeConfig::getKnifeMoves())
-      hist.fkState.decrementKnives(pla);
-    else
-      hist.fkState.decrementSickles(pla);
-    hist.fkState.remainingMovesInSequence = abilityMoves;
-    hist.fkState.abilityOwner = pla;
-    hist.fkState.manualPassPla = C_EMPTY;
-    hist.fkState.manualPassMoveNumber = 0;
-    hist.fkState.manualPassConsumedKnife = false;
-    hist.fkState.manualPassCanPairForSickle = false;
-    hist.presumedNextMovePla = pla;
-    hist.recomputeCurrentKoHash(board);
-  }
+  if(abilityMoves <= 0)
+    return false;
+
+  if(abilityMoves == FlyingKnifeConfig::getKnifeMoves())
+    hist.fkState.decrementKnives(pla);
+  else
+    hist.fkState.decrementSickles(pla);
+  hist.fkState.remainingMovesInSequence = abilityMoves;
+  hist.fkState.abilityOwner = pla;
+  hist.fkState.manualPassPla = C_EMPTY;
+  hist.fkState.manualPassMoveNumber = 0;
+  hist.fkState.manualPassConsumedKnife = false;
+  hist.fkState.manualPassCanPairForSickle = false;
+  hist.presumedNextMovePla = pla;
+  hist.recomputeCurrentKoHash(board);
   return true;
 }
 
@@ -184,7 +185,7 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
       repBound, drawEquivalentWinsForWhite
     );
     if(hasChanceTransition) {
-      maybeApplyInferredFlyingKnifeChanceTransition(histOrig, (int)i, board, hist);
+      maybeApplyInferredFlyingKnifeChanceTrigger(histOrig, (int)i, board, hist);
       graphHash = getGraphHash(graphHash, hist, hist.fkState.isInSequence() ? hist.presumedNextMovePla : actualNextPlayer, repBound, drawEquivalentWinsForWhite);
     }
   }

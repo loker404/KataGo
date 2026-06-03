@@ -1072,33 +1072,36 @@ bool TrainingDataWriter::flushIfNonempty(string& resultingFilename) {
 }
 
 static bool canDecomposeFlyingKnifeRun(int extraMoves, int knives, int sickles) {
-  if(extraMoves == 0)
-    return true;
   if(extraMoves < 0)
     return false;
-  if(knives > 0 && canDecomposeFlyingKnifeRun(extraMoves - FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles))
-    return true;
-  if(sickles > 0 && canDecomposeFlyingKnifeRun(extraMoves - FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1))
-    return true;
+  for(int knivesUsed = 0; knivesUsed <= knives; knivesUsed++) {
+    for(int sicklesUsed = 0; sicklesUsed <= sickles; sicklesUsed++) {
+      int abilityMoves =
+        knivesUsed * FlyingKnifeConfig::getKnifeMoves() +
+        sicklesUsed * FlyingKnifeConfig::getSickleMoves();
+      if(abilityMoves == extraMoves)
+        return true;
+    }
+  }
   return false;
 }
 
-static void maybeApplyInferredFlyingKnifeTrigger(
+static bool maybeApplyInferredFlyingKnifeTrigger(
   const vector<Move>& moves,
   int turnIdx,
   const Board& board,
   BoardHistory& hist
 ) {
   if(!hist.rules.fkConfig.isEnabled())
-    return;
+    return true;
   if(hist.fkState.isInSequence())
-    return;
+    return true;
   if(turnIdx+1 >= moves.size())
-    return;
+    return true;
 
   Player pla = moves[turnIdx].pla;
   if(moves[turnIdx+1].pla != pla)
-    return;
+    return true;
 
   int extraMoves = 0;
   for(int i = turnIdx+1; i<moves.size() && moves[i].pla == pla; i++)
@@ -1112,7 +1115,7 @@ static void maybeApplyInferredFlyingKnifeTrigger(
   else if(sickles > 0 && canDecomposeFlyingKnifeRun(extraMoves - FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1))
     abilityMoves = FlyingKnifeConfig::getSickleMoves();
   else
-    testAssert(false);
+    return false;
 
   if(abilityMoves == FlyingKnifeConfig::getKnifeMoves())
     hist.fkState.decrementKnives(pla);
@@ -1126,6 +1129,21 @@ static void maybeApplyInferredFlyingKnifeTrigger(
   hist.fkState.manualPassCanPairForSickle = false;
   hist.presumedNextMovePla = pla;
   hist.recomputeCurrentKoHash(board);
+  return true;
+}
+
+static StringError makeFlyingKnifeReplayError(const vector<Move>& moves, int turnIdx, const Board& board) {
+  Player pla = moves[turnIdx].pla;
+  int extraMoves = 0;
+  for(int i = turnIdx+1; i<moves.size() && moves[i].pla == pla; i++)
+    extraMoves++;
+  return StringError(
+    "TrainingDataWriter: could not infer flying knife trigger at turn " +
+    Global::intToString(turnIdx) +
+    ", player " + PlayerIO::playerToString(pla) +
+    ", move " + Location::toString(moves[turnIdx].loc, board) +
+    ", consecutive extra moves " + Global::intToString(extraMoves)
+  );
 }
 
 void TrainingDataWriter::writeGame(const FinishedGameData& data) {
@@ -1180,7 +1198,8 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
       testAssert(move.pla == nextPlayer);
       testAssert(hist.isLegal(board,move.loc,move.pla));
       hist.makeBoardMoveAssumeLegal(board, move.loc, move.pla, NULL);
-      maybeApplyInferredFlyingKnifeTrigger(data.endHist.moveHistory, turnIdx, board, hist);
+      if(!maybeApplyInferredFlyingKnifeTrigger(data.endHist.moveHistory, turnIdx, board, hist))
+        throw makeFlyingKnifeReplayError(data.endHist.moveHistory, turnIdx, board);
       nextPlayer = hist.presumedNextMovePla;
 
       posHistForFutureBoards.push_back(board);
@@ -1267,7 +1286,8 @@ void TrainingDataWriter::writeGame(const FinishedGameData& data) {
     testAssert(move.pla == nextPlayer);
     testAssert(hist.isLegal(board,move.loc,move.pla));
     hist.makeBoardMoveAssumeLegal(board, move.loc, move.pla, NULL);
-    maybeApplyInferredFlyingKnifeTrigger(data.endHist.moveHistory, turnIdx, board, hist);
+    if(!maybeApplyInferredFlyingKnifeTrigger(data.endHist.moveHistory, turnIdx, board, hist))
+      throw makeFlyingKnifeReplayError(data.endHist.moveHistory, turnIdx, board);
     nextPlayer = hist.presumedNextMovePla;
   }
 
