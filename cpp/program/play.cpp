@@ -1692,16 +1692,10 @@ FinishedGameData* Play::runGame(
     //Flying knife: if no sequence is active, check if we should trigger a new ability
     if(hist.rules.fkConfig.isEnabled() && !hist.fkState.isInSequence()) {
       int moveNumber = (int)hist.moveHistory.size();
-      int abilityType = hist.checkAndActivateAbility(board, moveNumber, gameRand, hist.moveHistory.back().pla);
-      if(abilityType > 0)
-        pla = hist.moveHistory.back().pla;  //Same player continues during a flying knife sequence
-      else
-        pla = hist.presumedNextMovePla;
+      hist.checkAndActivateAbility(board, moveNumber, gameRand, hist.moveHistory.back().pla);
     }
-    else {
-      //Use presumedNextMovePla to handle flying knife sequences correctly
-      pla = hist.presumedNextMovePla;
-    }
+    //Use presumedNextMovePla to handle flying knife sequences correctly.
+    pla = hist.presumedNextMovePla;
   }
 
   gameData->endHist = hist;
@@ -2060,7 +2054,13 @@ FinishedGameData* Play::runGame(
         Move move = gameData->endHist.moveHistory[turnIdx];
         testAssert(move.pla == pla);
         hist.makeBoardMoveAssumeLegal(board, move.loc, move.pla, NULL);
-        pla = getOpp(pla);
+        if(gameData->endHist.flyingKnifeTriggerHistory.size() == gameData->endHist.moveHistory.size() &&
+           gameData->endHist.flyingKnifeTriggerHistory[turnIdx] > 0) {
+          int abilityMoves = gameData->endHist.flyingKnifeTriggerHistory[turnIdx];
+          bool suc = hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), move.pla, abilityMoves);
+          testAssert(suc);
+        }
+        pla = hist.presumedNextMovePla;
       }
 
       for(int i = 0; i<gameData->sidePositions.size(); i++) {
@@ -2123,7 +2123,17 @@ static void replayGameUpToMove(const FinishedGameData* finishedGameData, int mov
     }
     testAssert(finishedGameData->endHist.moveHistory[i].pla == pla);
     hist.makeBoardMoveAssumeLegal(board,loc,pla,NULL);
-    pla = getOpp(pla);
+    if(finishedGameData->endHist.flyingKnifeTriggerHistory.size() == finishedGameData->endHist.moveHistory.size() &&
+       finishedGameData->endHist.flyingKnifeTriggerHistory[i] > 0) {
+      int abilityMoves = finishedGameData->endHist.flyingKnifeTriggerHistory[i];
+      bool suc = hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), pla, abilityMoves);
+      if(!suc) {
+        if(rules == finishedGameData->startHist.rules && hist.encorePhase == 0)
+          throw StringError("Invalid flying knife trigger when replaying to fork game?");
+        return;
+      }
+    }
+    pla = hist.presumedNextMovePla;
 
     if(hist.isGameFinished)
       return;
@@ -2229,7 +2239,7 @@ void Play::maybeForkGame(
   //Make that move
   testAssert(hist.isLegal(board,bestMove,pla));
   hist.makeBoardMoveAssumeLegal(board,bestMove,pla,NULL);
-  pla = getOpp(pla);
+  pla = hist.presumedNextMovePla;
 
   //If the game is over now, don't actually do anything
   if(hist.isGameFinished)
@@ -2314,7 +2324,7 @@ void Play::maybeHintForkGame(
     return;
 
   hist.makeBoardMoveAssumeLegal(board,otherGameProps.hintLoc,pla,NULL);
-  pla = getOpp(pla);
+  pla = hist.presumedNextMovePla;
 
   //If the game is over now, don't actually do anything
   if(hist.isGameFinished)

@@ -29,6 +29,7 @@ BoardHistory::BoardHistory()
   :rules(),
    moveHistory(),
    preventEncoreHistory(),
+   flyingKnifeTriggerHistory(),
    koHashHistory(),
    firstTurnIdxWithKoHistory(0),
    initialBoard(),
@@ -69,6 +70,7 @@ BoardHistory::BoardHistory(const Board& board, Player pla, const Rules& r, int e
   :rules(r),
    moveHistory(),
    preventEncoreHistory(),
+   flyingKnifeTriggerHistory(),
    koHashHistory(),
    firstTurnIdxWithKoHistory(0),
    initialBoard(),
@@ -108,6 +110,7 @@ BoardHistory::BoardHistory(const BoardHistory& other)
   :rules(other.rules),
    moveHistory(other.moveHistory),
    preventEncoreHistory(other.preventEncoreHistory),
+   flyingKnifeTriggerHistory(other.flyingKnifeTriggerHistory),
    koHashHistory(other.koHashHistory),
    firstTurnIdxWithKoHistory(other.firstTurnIdxWithKoHistory),
    initialBoard(other.initialBoard),
@@ -151,6 +154,7 @@ BoardHistory& BoardHistory::operator=(const BoardHistory& other)
   rules = other.rules;
   moveHistory = other.moveHistory;
   preventEncoreHistory = other.preventEncoreHistory;
+  flyingKnifeTriggerHistory = other.flyingKnifeTriggerHistory;
   koHashHistory = other.koHashHistory;
   firstTurnIdxWithKoHistory = other.firstTurnIdxWithKoHistory;
   initialBoard = other.initialBoard;
@@ -195,6 +199,7 @@ BoardHistory::BoardHistory(BoardHistory&& other) noexcept
  :rules(other.rules),
   moveHistory(std::move(other.moveHistory)),
   preventEncoreHistory(std::move(other.preventEncoreHistory)),
+  flyingKnifeTriggerHistory(std::move(other.flyingKnifeTriggerHistory)),
   koHashHistory(std::move(other.koHashHistory)),
   firstTurnIdxWithKoHistory(other.firstTurnIdxWithKoHistory),
   initialBoard(other.initialBoard),
@@ -235,6 +240,7 @@ BoardHistory& BoardHistory::operator=(BoardHistory&& other) noexcept
   rules = other.rules;
   moveHistory = std::move(other.moveHistory);
   preventEncoreHistory = std::move(other.preventEncoreHistory);
+  flyingKnifeTriggerHistory = std::move(other.flyingKnifeTriggerHistory);
   koHashHistory = std::move(other.koHashHistory);
   firstTurnIdxWithKoHistory = other.firstTurnIdxWithKoHistory;
   initialBoard = other.initialBoard;
@@ -279,6 +285,7 @@ void BoardHistory::clear(const Board& board, Player pla, const Rules& r, int ePh
   rules = r;
   moveHistory.clear();
   preventEncoreHistory.clear();
+  flyingKnifeTriggerHistory.clear();
   koHashHistory.clear();
   firstTurnIdxWithKoHistory = 0;
 
@@ -497,6 +504,12 @@ void BoardHistory::printDebugInfo(ostream& out, const Board& board) const {
   for(int i = 0; i<moveHistory.size(); i++)
     out << Location::toString(moveHistory[i].loc,board) << " ";
   out << endl;
+  if(flyingKnifeTriggerHistory.size() == moveHistory.size()) {
+    out << "Flying knife triggers ";
+    for(int i = 0; i<flyingKnifeTriggerHistory.size(); i++)
+      out << flyingKnifeTriggerHistory[i] << " ";
+    out << endl;
+  }
   assert(firstTurnIdxWithKoHistory + koHashHistory.size() == moveHistory.size() + 1);
 }
 
@@ -1107,6 +1120,7 @@ void BoardHistory::makeBoardMoveAssumeLegal(Board& board, Loc moveLoc, Player mo
   koHashHistory.push_back(koHashAfterThisMove);
   moveHistory.emplace_back(moveLoc,movePla);
   preventEncoreHistory.push_back(preventEncore);
+  flyingKnifeTriggerHistory.push_back(0);
   numTurnsThisPhase += 1;
   numApproxValidTurnsThisPhase += 1;
   numConsecValidTurnsThisGame += 1;
@@ -1492,6 +1506,45 @@ void BoardHistory::initFlyingKnifeState() {
   fkState.abilityOwner = C_EMPTY;
 }
 
+bool BoardHistory::applyFlyingKnifeAbilityForReplay(const Board& board, int moveNumber, Player pla, int abilityMoves) {
+  if(!rules.fkConfig.isEnabled())
+    return false;
+  if(fkState.isInSequence())
+    return false;
+  if(moveNumber <= 0 || (size_t)moveNumber > moveHistory.size())
+    return false;
+  if(moveHistory[moveNumber-1].pla != pla)
+    return false;
+  if(moveHistory[moveNumber-1].loc == Board::PASS_LOC)
+    return false;
+  if(moveNumber < rules.fkConfig.triggerRangeStart || moveNumber > rules.fkConfig.triggerRangeEnd)
+    return false;
+  if(abilityMoves == FlyingKnifeConfig::getKnifeMoves()) {
+    if(fkState.getKnivesRemaining(pla) <= 0)
+      return false;
+    fkState.decrementKnives(pla);
+  }
+  else if(abilityMoves == FlyingKnifeConfig::getSickleMoves()) {
+    if(fkState.getSicklesRemaining(pla) <= 0)
+      return false;
+    fkState.decrementSickles(pla);
+  }
+  else
+    return false;
+
+  fkState.remainingMovesInSequence = abilityMoves;
+  fkState.abilityOwner = pla;
+  fkState.manualPassPla = C_EMPTY;
+  fkState.manualPassMoveNumber = 0;
+  fkState.manualPassConsumedKnife = false;
+  fkState.manualPassCanPairForSickle = false;
+  presumedNextMovePla = pla;
+  recomputeCurrentKoHash(board);
+  if((size_t)moveNumber <= flyingKnifeTriggerHistory.size())
+    flyingKnifeTriggerHistory[moveNumber-1] = abilityMoves;
+  return true;
+}
+
 int BoardHistory::checkAndActivateAbility(const Board& board, int moveNumber, Rand& rand, Player pla) {
   if(!rules.fkConfig.isEnabled())
     return 0;
@@ -1522,22 +1575,12 @@ int BoardHistory::checkAndActivateAbility(const Board& board, int moveNumber, Ra
   //Trigger! Choose between knife and sickle weighted by remaining counts
   int chosen = rand.nextInt(1, totalAbilities);
   int abilityType;
-  if(chosen <= knives) {
+  if(chosen <= knives)
     abilityType = FlyingKnifeConfig::getKnifeMoves();  // knife
-    fkState.decrementKnives(pla);
-  } else {
+  else
     abilityType = FlyingKnifeConfig::getSickleMoves();  // sickle
-    fkState.decrementSickles(pla);
-  }
 
-  fkState.remainingMovesInSequence = abilityType;  // 2 for knife, 3 for sickle
-  fkState.abilityOwner = pla;
-  fkState.manualPassPla = C_EMPTY;
-  fkState.manualPassMoveNumber = 0;
-  fkState.manualPassConsumedKnife = false;
-  fkState.manualPassCanPairForSickle = false;
-  presumedNextMovePla = pla;
-  recomputeCurrentKoHash(board);
-
+  bool suc = applyFlyingKnifeAbilityForReplay(board, moveNumber, pla, abilityType);
+  testAssert(suc);
   return abilityType;
 }

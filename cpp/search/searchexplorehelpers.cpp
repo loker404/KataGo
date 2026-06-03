@@ -717,21 +717,15 @@ static int getNumChanceChildrenForState(const SearchThread& thread, Player pla) 
 static void applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player pla, Player childNextPla) {
   thread.pla = childNextPla;
   thread.history.presumedNextMovePla = childNextPla;
-  if(chanceOutcome == 1) {
-    thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getKnifeMoves();
-    thread.history.fkState.abilityOwner = pla;
-    thread.history.fkState.decrementKnives(pla);
-  } else if(chanceOutcome == 2) {
-    thread.history.fkState.remainingMovesInSequence = FlyingKnifeConfig::getSickleMoves();
-    thread.history.fkState.abilityOwner = pla;
-    thread.history.fkState.decrementSickles(pla);
+  if(chanceOutcome == 1 || chanceOutcome == 2) {
+    int abilityMoves = chanceOutcome == 1 ? FlyingKnifeConfig::getKnifeMoves() : FlyingKnifeConfig::getSickleMoves();
+    bool suc = thread.history.applyFlyingKnifeAbilityForReplay(thread.board, (int)thread.history.moveHistory.size(), pla, abilityMoves);
+    testAssert(suc);
   }
-  if(chanceOutcome != 0) {
-    thread.history.fkState.manualPassPla = C_EMPTY;
-    thread.history.fkState.manualPassMoveNumber = 0;
-    thread.history.fkState.manualPassConsumedKnife = false;
-    thread.history.fkState.manualPassCanPairForSickle = false;
-  }
+  else if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&
+          thread.history.flyingKnifeTriggerHistory.size() > 0)
+    thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] =
+      0;
 }
 
 bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot) {
@@ -764,6 +758,10 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   Hash128 savedGraphHash = thread.graphHash;
   Player savedPla = thread.pla;
   Player savedPresumedNextMovePla = thread.history.presumedNextMovePla;
+  int savedFlyingKnifeTrigger = -1;
+  if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&
+     thread.history.flyingKnifeTriggerHistory.size() > 0)
+    savedFlyingKnifeTrigger = thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1];
 
   //Check if the selected child already exists
   SearchNode* child = children[chanceChild].getIfAllocated();
@@ -794,6 +792,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     thread.graphHash = savedGraphHash;
     thread.pla = savedPla;
     thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+    if(savedFlyingKnifeTrigger >= 0)
+      thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
 
     return shouldUpdateChildAncestors;
   }
@@ -821,6 +821,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
       thread.graphHash = savedGraphHash;
       thread.pla = savedPla;
       thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+      if(savedFlyingKnifeTrigger >= 0)
+        thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
       return false;
     }
   }
@@ -842,6 +844,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   thread.graphHash = savedGraphHash;
   thread.pla = savedPla;
   thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+  if(savedFlyingKnifeTrigger >= 0)
+    thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
 
   return shouldUpdateChildAncestors;
 }

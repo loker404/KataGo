@@ -457,8 +457,16 @@ map<string,string> ConfigParser::parseCommaSeparated(const string& commaSeparate
         current += c;
       }
       else if(c == '}' || c == ']') {
-        if(c == '}') braceDepth--;
-        else bracketDepth--;
+        if(c == '}') {
+          if(braceDepth <= 0)
+            throw ConfigParsingError("Unmatched '}' in comma-separated config value");
+          braceDepth--;
+        }
+        else {
+          if(bracketDepth <= 0)
+            throw ConfigParsingError("Unmatched ']' in comma-separated config value");
+          bracketDepth--;
+        }
         current += c;
       }
       else if(c == '"' || c == '\'') {
@@ -476,6 +484,10 @@ map<string,string> ConfigParser::parseCommaSeparated(const string& commaSeparate
       }
     }
   }
+  if(braceDepth > 0)
+    throw ConfigParsingError("Unclosed '{' in comma-separated config value");
+  if(bracketDepth > 0)
+    throw ConfigParsingError("Unclosed '[' in comma-separated config value");
   if(current.length() > 0)
     pieces.push_back(current);
 

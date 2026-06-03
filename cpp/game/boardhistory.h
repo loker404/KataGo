@@ -70,6 +70,9 @@ struct BoardHistory {
   std::vector<Move> moveHistory;
   //Chronological history of preventEncore, for ability to replay a board history
   std::vector<bool> preventEncoreHistory;
+  //Chronological history of flying-knife ability triggers after each move:
+  //0 for no trigger, otherwise the triggered ability's extra-move count.
+  std::vector<int> flyingKnifeTriggerHistory;
   //Chronological history of hashes, including the latest board's hash.
   //Theses are the hashes that determine whether a board is the "same" or not given the rules
   //(e.g. they include the player if situational superko, and not if positional)
@@ -183,6 +186,9 @@ struct BoardHistory {
   //Returns: 0=none, 2=knife activated, 3=sickle activated.
   //moveNumber is the current move count (number of moves already played).
   int checkAndActivateAbility(const Board& board, int moveNumber, Rand& rand, Player pla);
+  //Apply a known flying knife/sickle trigger after a move for replay or chance-node descent.
+  //Returns false if the trigger is invalid for the current state.
+  bool applyFlyingKnifeAbilityForReplay(const Board& board, int moveNumber, Player pla, int abilityMoves);
   //Set overrideNumHandicapStones and update bonus points accordingly
   void setOverrideNumHandicapStones(int n);
 
@@ -257,6 +263,7 @@ struct BoardHistory {
   //Compute a hash that takes into account the full situation, simple ko prohibition, and the previous turn's position. (Does NOT include rules).
   static Hash128 getSituationAndSimpleKoAndPrevPosHash(const Board& board, const BoardHistory& hist, Player nextPlayer);
   //Compute a hash that takes into account the full situation, the rules, discretized komi, and any immediate ko prohibitions.
+  //Does NOT include flying-knife state; callers that need it should also call mixFlyingKnifeStateHash.
   static Hash128 getSituationRulesAndKoHash(const Board& board, const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite);
   static void mixFlyingKnifeStateHash(const Rules& rules, const FlyingKnifeState& fkState, Hash128& hash);
   void recomputeCurrentKoHash(const Board& board);

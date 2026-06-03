@@ -67,6 +67,13 @@ static bool shouldApplyFlyingKnifeChanceTransition(const BoardHistory& hist) {
   return hist.fkState.getKnivesRemaining(pla) + hist.fkState.getSicklesRemaining(pla) > 0;
 }
 
+static int getRecordedFlyingKnifeAbilityMoves(const BoardHistory& hist, int turnIdx) {
+  if(hist.flyingKnifeTriggerHistory.size() != hist.moveHistory.size())
+    return -1;
+  testAssert(turnIdx >= 0 && (size_t)turnIdx < hist.flyingKnifeTriggerHistory.size());
+  return hist.flyingKnifeTriggerHistory[turnIdx];
+}
+
 static int inferFlyingKnifeAbilityMoves(
   const BoardHistory& histOrig,
   const BoardHistory& hist,
@@ -108,23 +115,12 @@ static bool maybeApplyInferredFlyingKnifeChanceTrigger(
     return false;
 
   Player pla = hist.moveHistory[hist.moveHistory.size()-1].pla;
-  int abilityMoves = inferFlyingKnifeAbilityMoves(histOrig, hist, turnIdx);
+  int recordedAbilityMoves = getRecordedFlyingKnifeAbilityMoves(histOrig, turnIdx);
+  int abilityMoves = recordedAbilityMoves >= 0 ? recordedAbilityMoves : inferFlyingKnifeAbilityMoves(histOrig, hist, turnIdx);
   if(abilityMoves <= 0)
     return false;
 
-  if(abilityMoves == FlyingKnifeConfig::getKnifeMoves())
-    hist.fkState.decrementKnives(pla);
-  else
-    hist.fkState.decrementSickles(pla);
-  hist.fkState.remainingMovesInSequence = abilityMoves;
-  hist.fkState.abilityOwner = pla;
-  hist.fkState.manualPassPla = C_EMPTY;
-  hist.fkState.manualPassMoveNumber = 0;
-  hist.fkState.manualPassConsumedKnife = false;
-  hist.fkState.manualPassCanPairForSickle = false;
-  hist.presumedNextMovePla = pla;
-  hist.recomputeCurrentKoHash(board);
-  return true;
+  return hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), pla, abilityMoves);
 }
 
 Hash128 GraphHash::getStateHash(const BoardHistory& hist, Player nextPlayer, double drawEquivalentWinsForWhite) {
