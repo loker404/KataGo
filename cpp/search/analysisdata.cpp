@@ -213,15 +213,15 @@ bool AnalysisData::pvContainsNonVirtualPass() const {
   return false;
 }
 
+static bool isVirtualPVPass(const std::vector<bool>& pvIsVirtualPass, size_t idx) {
+  return idx < pvIsVirtualPass.size() && pvIsVirtualPass[idx];
+}
+
 void AnalysisData::writePV(std::ostream& out, const Board& board) const {
   for(int j = 0; j<pv.size(); j++) {
     if(j > 0)
       out << " ";
-    bool isVirtualPass = j < pvIsVirtualPass.size() && pvIsVirtualPass[j];
-    if(isVirtualPass)
-      out << "PASS";
-    else
-      out << Location::toString(pv[j],board);
+    out << Location::toString(pv[j],board);
   }
 }
 
@@ -246,6 +246,8 @@ int AnalysisData::getPVLenUpToPhaseEnd(const Board& initialBoard, const BoardHis
   Player nextPla = initialPla;
   int j;
   for(j = 0; j<pv.size(); j++) {
+    if(isVirtualPVPass(pvIsVirtualPass,j))
+      continue;
     hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
     nextPla = getOpp(nextPla);
     if(hist.encorePhase != initialHist.encorePhase)
@@ -263,6 +265,8 @@ void AnalysisData::writePVUpToPhaseEnd(std::ostream& out, const Board& initialBo
       out << " ";
     out << Location::toString(pv[j],board);
 
+    if(isVirtualPVPass(pvIsVirtualPass,j))
+      continue;
     hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
     nextPla = getOpp(nextPla);
     if(hist.encorePhase != initialHist.encorePhase)
@@ -280,6 +284,8 @@ void AnalysisData::writePVVisitsUpToPhaseEnd(std::ostream& out, const Board& ini
       out << " ";
     out << pvVisits[j];
 
+    if(isVirtualPVPass(pvIsVirtualPass,j))
+      continue;
     hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
     nextPla = getOpp(nextPla);
     if(hist.encorePhase != initialHist.encorePhase)
@@ -297,6 +303,8 @@ void AnalysisData::writePVEdgeVisitsUpToPhaseEnd(std::ostream& out, const Board&
       out << " ";
     out << pvEdgeVisits[j];
 
+    if(isVirtualPVPass(pvIsVirtualPass,j))
+      continue;
     hist.makeBoardMoveAssumeLegal(board,pv[j],nextPla,NULL);
     nextPla = getOpp(nextPla);
     if(hist.encorePhase != initialHist.encorePhase)

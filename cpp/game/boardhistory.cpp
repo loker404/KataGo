@@ -1353,6 +1353,17 @@ Hash128 BoardHistory::getSituationRulesAndKoHash(const Board& board, const Board
   if(hist.rules.friendlyPassOk)
     hash ^= Rules::ZOBRIST_FRIENDLY_PASS_OK_HASH;
 
+  const FlyingKnifeConfig& fkConfig = hist.rules.fkConfig;
+  uint64_t fkConfigHash = 0x4f1bbcdd3d5a6e41ULL;
+  fkConfigHash ^= Hash::murmurMix((uint64_t)(uint32_t)fkConfig.triggerRangeStart + 0x9e3779b97f4a7c15ULL);
+  fkConfigHash ^= Hash::nasam((uint64_t)(uint32_t)fkConfig.triggerRangeEnd + 0xbf58476d1ce4e5b9ULL);
+  fkConfigHash ^= Hash::murmurMix((uint64_t)(uint32_t)fkConfig.blackKnifeCount + 0x94d049bb133111ebULL);
+  fkConfigHash ^= Hash::nasam((uint64_t)(uint32_t)fkConfig.blackSickleCount + 0x2545f4914f6cdd1dULL);
+  fkConfigHash ^= Hash::murmurMix((uint64_t)(uint32_t)fkConfig.whiteKnifeCount + 0x369dea0f31a53f85ULL);
+  fkConfigHash ^= Hash::nasam((uint64_t)(uint32_t)fkConfig.whiteSickleCount + 0xdb4f0b9175ae2165ULL);
+  hash.hash0 ^= fkConfigHash;
+  hash.hash1 ^= Hash::basicLCong(fkConfigHash);
+
   return hash;
 }
 

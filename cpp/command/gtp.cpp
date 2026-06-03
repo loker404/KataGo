@@ -1054,7 +1054,7 @@ struct GTPEngine {
       bool shouldClearSearchForFlyingKnife = false;
       if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
         int moveNumber = (int)hist.moveHistory.size();
-        if(!hist.fkState.isInSequence()) {
+        if(moveNumber > 0 && !hist.fkState.isInSequence()) {
           int abilityType = hist.checkAndActivateAbility(search->rootBoard, moveNumber, gtpRand, hist.moveHistory.back().pla);
           if(abilityType > 0) {
             response += " # flying_knife " + Global::intToString(abilityType);

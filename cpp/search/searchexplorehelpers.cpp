@@ -758,6 +758,10 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   Hash128 savedGraphHash = thread.graphHash;
   Player savedPla = thread.pla;
   Player savedPresumedNextMovePla = thread.history.presumedNextMovePla;
+  Hash128 savedCurrentKoHash;
+  bool savedCurrentKoHashValid = thread.history.koHashHistory.size() > 0;
+  if(savedCurrentKoHashValid)
+    savedCurrentKoHash = thread.history.koHashHistory[thread.history.koHashHistory.size()-1];
   int savedFlyingKnifeTrigger = -1;
   if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&
      thread.history.flyingKnifeTriggerHistory.size() > 0)
@@ -792,6 +796,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     thread.graphHash = savedGraphHash;
     thread.pla = savedPla;
     thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+    if(savedCurrentKoHashValid)
+      thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
     if(savedFlyingKnifeTrigger >= 0)
       thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
 
@@ -821,6 +827,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
       thread.graphHash = savedGraphHash;
       thread.pla = savedPla;
       thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+      if(savedCurrentKoHashValid)
+        thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
       if(savedFlyingKnifeTrigger >= 0)
         thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
       return false;
@@ -844,6 +852,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   thread.graphHash = savedGraphHash;
   thread.pla = savedPla;
   thread.history.presumedNextMovePla = savedPresumedNextMovePla;
+  if(savedCurrentKoHashValid)
+    thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
   if(savedFlyingKnifeTrigger >= 0)
     thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
 

@@ -2125,11 +2125,15 @@ bool Search::getAnalysisJson(
     moveInfo["playSelectionValue"] = Global::roundDynamic(data.playSelectionValue,OUTPUT_PRECISION);
 
     json pv = json::array();
+    json pvIsVirtualPass = json::array();
     int pvLen =
       (preventEncore && data.pvContainsNonVirtualPass()) ? data.getPVLenUpToPhaseEnd(board, hist, rootPla) : (int)data.pv.size();
-    for(int j = 0; j < pvLen; j++)
+    for(int j = 0; j < pvLen; j++) {
       pv.push_back(Location::toString(data.pv[j], board));
+      pvIsVirtualPass.push_back(j < data.pvIsVirtualPass.size() && data.pvIsVirtualPass[j]);
+    }
     moveInfo["pv"] = pv;
+    moveInfo["pvIsVirtualPass"] = pvIsVirtualPass;
 
     if(includePVVisits) {
       testAssert(data.pvVisits.size() >= pvLen);
