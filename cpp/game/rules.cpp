@@ -56,6 +56,16 @@ bool FlyingKnifeConfig::canDecomposeAfterAbility(
   return canDecomposeRun(extraMoves - abilityMoves, remainingMovesAtEnd, knives, sickles);
 }
 
+void FlyingKnifeConfig::validate() const {
+  if(triggerRangeStart < 0)
+    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
+  if(triggerRangeEnd < triggerRangeStart)
+    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
+  if(blackKnifeCount < 0 || blackSickleCount < 0 ||
+     whiteKnifeCount < 0 || whiteSickleCount < 0)
+    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+}
+
 bool FlyingKnifeConfig::operator==(const FlyingKnifeConfig& other) const {
   return triggerRangeStart == other.triggerRangeStart &&
          triggerRangeEnd == other.triggerRangeEnd &&
@@ -130,13 +140,7 @@ FlyingKnifeConfig FlyingKnifeConfig::fromString(const std::string& sOrig) {
       throw IOError("FlyingKnifeConfig: unknown key: " + key);
   }
 
-  if(config.triggerRangeStart < 0)
-    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
-  if(config.triggerRangeEnd < config.triggerRangeStart)
-    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
-  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
-     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
-    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+  config.validate();
 
   return config;
 }
@@ -183,13 +187,7 @@ static FlyingKnifeConfig parseFlyingKnifeConfigJson(const nlohmann::json& input)
       throw IOError("FlyingKnifeConfig: unknown key: " + key);
   }
 
-  if(config.triggerRangeStart < 0)
-    throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");
-  if(config.triggerRangeEnd < config.triggerRangeStart)
-    throw IOError("FlyingKnifeConfig: triggerRangeEnd must be >= triggerRangeStart");
-  if(config.blackKnifeCount < 0 || config.blackSickleCount < 0 ||
-     config.whiteKnifeCount < 0 || config.whiteSickleCount < 0)
-    throw IOError("FlyingKnifeConfig: ability counts must be >= 0");
+  config.validate();
 
   return config;
 }

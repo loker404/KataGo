@@ -813,6 +813,10 @@ void Search::appendPVForMove(
       return;
     if(moveNode->nextPla == expectedPla)
       return;
+    // PV strings do not carry player labels. Insert a virtual pass as a turn
+    // separator when the real search state keeps the same player to move, such
+    // as during a flying-knife sequence. pvIsVirtualPass distinguishes this
+    // marker from a real pass.
     buf.push_back(Board::PASS_LOC);
     virtualPassBuf->push_back(true);
     visitsBuf.push_back(moveNode->stats.visits.load(std::memory_order_acquire));

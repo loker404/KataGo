@@ -675,6 +675,10 @@ float Search::computeTriggerProbability(const SearchThread& thread) const {
   return remainingOpportunitiesForPla <= 0 ? 1.0f : std::min(1.0f, (float)totalAbilities / (float)remainingOpportunitiesForPla);
 }
 
+static constexpr int CHANCE_OUTCOME_NONE = 0;
+static constexpr int CHANCE_OUTCOME_KNIFE = 1;
+static constexpr int CHANCE_OUTCOME_SICKLE = 2;
+
 int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
   Player pla = getOpp(thread.pla);
   int knives = thread.history.fkState.getKnivesRemaining(pla);
@@ -682,26 +686,27 @@ int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
   int totalAbilities = knives + sickles;
   testAssert(totalAbilities > 0);
   if(totalAbilities <= 0)
-    return 0;
+    return CHANCE_OUTCOME_NONE;
   double r = thread.rand.nextDouble();
   if(r >= triggerProb) {
-    return 0; // No trigger
+    return CHANCE_OUTCOME_NONE;
   }
-  //Triggered - choose between knife and sickle using an independent random draw
-  if(knives == 0) return 2;
-  if(sickles == 0) return 1;
+  //Triggered - choose between knife and sickle using an independent random draw.
+  //Outcome values describe ability type, not child slot. getChanceChildIndexForOutcome maps them to compact slots.
+  if(knives == 0) return CHANCE_OUTCOME_SICKLE;
+  if(sickles == 0) return CHANCE_OUTCOME_KNIFE;
   double knifeProb = (double)knives / (double)totalAbilities;
   double r2 = thread.rand.nextDouble();
-  if(r2 < knifeProb) return 1;
-  return 2;
+  if(r2 < knifeProb) return CHANCE_OUTCOME_KNIFE;
+  return CHANCE_OUTCOME_SICKLE;
 }
 
 static int getChanceChildIndexForOutcome(const SearchThread& thread, Player pla, int chanceOutcome) {
-  if(chanceOutcome == 0)
+  if(chanceOutcome == CHANCE_OUTCOME_NONE)
     return 0;
-  if(chanceOutcome == 1)
+  if(chanceOutcome == CHANCE_OUTCOME_KNIFE)
     return 1;
-  assert(chanceOutcome == 2);
+  assert(chanceOutcome == CHANCE_OUTCOME_SICKLE);
   return thread.history.fkState.getKnivesRemaining(pla) > 0 ? 2 : 1;
 }
 
@@ -717,8 +722,8 @@ static int getNumChanceChildrenForState(const SearchThread& thread, Player pla) 
 static void applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player pla, Player childNextPla) {
   thread.pla = childNextPla;
   thread.history.presumedNextMovePla = childNextPla;
-  if(chanceOutcome == 1 || chanceOutcome == 2) {
-    int abilityMoves = chanceOutcome == 1 ? FlyingKnifeConfig::getKnifeMoves() : FlyingKnifeConfig::getSickleMoves();
+  if(chanceOutcome == CHANCE_OUTCOME_KNIFE || chanceOutcome == CHANCE_OUTCOME_SICKLE) {
+    int abilityMoves = chanceOutcome == CHANCE_OUTCOME_KNIFE ? FlyingKnifeConfig::getKnifeMoves() : FlyingKnifeConfig::getSickleMoves();
     bool suc = thread.history.applyFlyingKnifeAbility(thread.board, (int)thread.history.moveHistory.size(), pla, abilityMoves);
     testAssert(suc);
   }
@@ -732,8 +737,8 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   float triggerProb = computeTriggerProbability(thread);
   int chanceOutcome = selectChanceChild(thread, triggerProb);
 
-  //Use contiguous child slots for the currently possible outcomes. Outcome values are:
-  //0 = no-trigger, 1 = knife, 2 = sickle.
+  //Use contiguous child slots for currently possible outcomes. Outcome values describe ability type:
+  //none, knife, or sickle. The child index may differ when only one ability type remains.
   Player pla = getOpp(thread.pla);
   int chanceChild = getChanceChildIndexForOutcome(thread, pla, chanceOutcome);
   int numChanceChildren = getNumChanceChildrenForState(thread, pla);
@@ -748,7 +753,7 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   SearchNodeChildrenReference children = node.getChildren(nodeState);
 
   //Determine the child's nextPla
-  Player childNextPla = (chanceOutcome == 0) ? getOpp(pla) : pla;
+  Player childNextPla = (chanceOutcome == CHANCE_OUTCOME_NONE) ? getOpp(pla) : pla;
 
   //Save only the lightweight fields that applyChanceOutcome modifies
   //NOTE: We are NOT saving/restoring board/history because playoutDescend descends into a child node
