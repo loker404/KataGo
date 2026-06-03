@@ -1058,9 +1058,10 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
     int i = 0;
     for(; i<childrenCapacity; i++) {
       SearchNode* child = children[i].getIfAllocated();
-      if(child == NULL)
+      if(child == NULL && !node->isChanceNode)
         break;
-      foundAnyChildren = true;
+      if(child != NULL)
+        foundAnyChildren = true;
     }
     for(; i<childrenCapacity; i++) {
       SearchNode* child = children[i].getIfAllocated();
@@ -1115,7 +1116,7 @@ void Search::recursivelyRecomputeStats(SearchNode& n) {
         node->statsLock.clear(std::memory_order_release);
       }
     }
-    else if(!node->isChanceNode) {
+    else {
       //Otherwise recompute it using the usual method
       recomputeNodeStats(*node, thread, 0, isRoot);
     }

@@ -1107,12 +1107,8 @@ static bool maybeApplyFlyingKnifeTriggerForReplay(
 
   int knives = hist.fkState.getKnivesRemaining(pla);
   int sickles = hist.fkState.getSicklesRemaining(pla);
-  int abilityMoves = 0;
-  if(knives > 0 && FlyingKnifeConfig::canDecomposeRun(extraMoves - FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles))
-    abilityMoves = FlyingKnifeConfig::getKnifeMoves();
-  else if(sickles > 0 && FlyingKnifeConfig::canDecomposeRun(extraMoves - FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1))
-    abilityMoves = FlyingKnifeConfig::getSickleMoves();
-  else
+  int abilityMoves = FlyingKnifeConfig::inferUniqueAbilityMovesFromRun(extraMoves, 0, knives, sickles);
+  if(abilityMoves <= 0)
     return false;
 
   return applyFlyingKnifeTrigger(pla, abilityMoves, board, hist);

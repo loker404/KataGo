@@ -176,8 +176,10 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
   for(int i = 0; i<childrenCapacity; i++) {
     const SearchChildPointer& childPointer = children[i];
     const SearchNode* child = childPointer.getIfAllocated();
-    if(child == NULL)
+    if(child == NULL && !node.isChanceNode)
       break;
+    if(child == NULL)
+      continue;
     MoreNodeStats& stats = statsBuf[numGoodChildren];
 
     Loc moveLoc = childPointer.getMoveLocRelaxed();
@@ -218,7 +220,7 @@ void Search::recomputeNodeStats(SearchNode& node, SearchThread& thread, int numV
     currentTotalChildWeight = pruneNoiseWeight(statsBuf, numGoodChildren, currentTotalChildWeight, policyProbsBuf);
   }
 
-  {
+  if(!node.isChanceNode) {
     double amountToSubtract = 0.0;
     double amountToPrune = 0.0;
     if(isRoot && searchParams.rootNoiseEnabled && !searchParams.useNoisePruning) {

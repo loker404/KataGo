@@ -56,6 +56,23 @@ bool FlyingKnifeConfig::canDecomposeAfterAbility(
   return canDecomposeRun(extraMoves - abilityMoves, remainingMovesAtEnd, knives, sickles);
 }
 
+int FlyingKnifeConfig::inferUniqueAbilityMovesFromRun(
+  int extraMoves,
+  int remainingMovesAtEnd,
+  int knives,
+  int sickles
+) {
+  bool canUseKnife = knives > 0 && canDecomposeAfterAbility(
+    extraMoves, remainingMovesAtEnd, getKnifeMoves(), knives - 1, sickles
+  );
+  bool canUseSickle = sickles > 0 && canDecomposeAfterAbility(
+    extraMoves, remainingMovesAtEnd, getSickleMoves(), knives, sickles - 1
+  );
+  if(canUseKnife == canUseSickle)
+    return 0;
+  return canUseKnife ? getKnifeMoves() : getSickleMoves();
+}
+
 void FlyingKnifeConfig::validate() const {
   if(triggerRangeStart < 0)
     throw IOError("FlyingKnifeConfig: triggerRangeStart must be >= 0");

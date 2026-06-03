@@ -20,6 +20,7 @@ struct FlyingKnifeConfig {
   static bool canDecomposeRun(int extraMoves, int knives, int sickles);
   static bool canDecomposeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles);
   static bool canDecomposeAfterAbility(int extraMoves, int remainingMovesAtEnd, int abilityMoves, int knives, int sickles);
+  static int inferUniqueAbilityMovesFromRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles);
   void validate() const;
 
   nlohmann::json toJson() const;

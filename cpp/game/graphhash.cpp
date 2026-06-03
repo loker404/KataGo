@@ -49,15 +49,7 @@ static int inferFlyingKnifeAbilityMoves(
 
   int knives = hist.fkState.getKnivesRemaining(pla);
   int sickles = hist.fkState.getSicklesRemaining(pla);
-  if(knives > 0 && FlyingKnifeConfig::canDecomposeAfterAbility(
-    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles
-  ))
-    return FlyingKnifeConfig::getKnifeMoves();
-  if(sickles > 0 && FlyingKnifeConfig::canDecomposeAfterAbility(
-    extraMoves, remainingMovesAtEnd, FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1
-  ))
-    return FlyingKnifeConfig::getSickleMoves();
-  return 0;
+  return FlyingKnifeConfig::inferUniqueAbilityMovesFromRun(extraMoves, remainingMovesAtEnd, knives, sickles);
 }
 
 static bool maybeApplyInferredFlyingKnifeChanceTrigger(

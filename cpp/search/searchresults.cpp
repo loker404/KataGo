@@ -844,7 +844,7 @@ void Search::appendPVForMove(
         const SearchChildPointer& childPointer = chanceChildren[i];
         const SearchNode* child = childPointer.getIfAllocated();
         if(child == NULL)
-          break;
+          continue;
         int64_t edgeVisits = childPointer.getEdgeVisits();
         double childWeight = child->stats.getChildWeight(edgeVisits);
         if(childWeight > bestChanceChildWeight) {
