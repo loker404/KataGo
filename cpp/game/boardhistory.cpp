@@ -1506,7 +1506,7 @@ void BoardHistory::initFlyingKnifeState() {
   fkState.abilityOwner = C_EMPTY;
 }
 
-bool BoardHistory::applyFlyingKnifeAbilityForReplay(const Board& board, int moveNumber, Player pla, int abilityMoves) {
+bool BoardHistory::applyFlyingKnifeAbility(const Board& board, int moveNumber, Player pla, int abilityMoves) {
   if(!rules.fkConfig.isEnabled())
     return false;
   if(fkState.isInSequence())
@@ -1580,7 +1580,7 @@ int BoardHistory::checkAndActivateAbility(const Board& board, int moveNumber, Ra
   else
     abilityType = FlyingKnifeConfig::getSickleMoves();  // sickle
 
-  bool suc = applyFlyingKnifeAbilityForReplay(board, moveNumber, pla, abilityType);
+  bool suc = applyFlyingKnifeAbility(board, moveNumber, pla, abilityType);
   testAssert(suc);
   return abilityType;
 }

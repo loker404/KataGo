@@ -186,9 +186,9 @@ struct BoardHistory {
   //Returns: 0=none, 2=knife activated, 3=sickle activated.
   //moveNumber is the current move count (number of moves already played).
   int checkAndActivateAbility(const Board& board, int moveNumber, Rand& rand, Player pla);
-  //Apply a known flying knife/sickle trigger after a move for replay or chance-node descent.
+  //Apply a known flying knife/sickle trigger after a move.
   //Returns false if the trigger is invalid for the current state.
-  bool applyFlyingKnifeAbilityForReplay(const Board& board, int moveNumber, Player pla, int abilityMoves);
+  bool applyFlyingKnifeAbility(const Board& board, int moveNumber, Player pla, int abilityMoves);
   //Set overrideNumHandicapStones and update bonus points accordingly
   void setOverrideNumHandicapStones(int n);
 

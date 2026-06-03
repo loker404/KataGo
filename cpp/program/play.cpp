@@ -2057,7 +2057,7 @@ FinishedGameData* Play::runGame(
         if(gameData->endHist.flyingKnifeTriggerHistory.size() == gameData->endHist.moveHistory.size() &&
            gameData->endHist.flyingKnifeTriggerHistory[turnIdx] > 0) {
           int abilityMoves = gameData->endHist.flyingKnifeTriggerHistory[turnIdx];
-          bool suc = hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), move.pla, abilityMoves);
+          bool suc = hist.applyFlyingKnifeAbility(board, (int)hist.moveHistory.size(), move.pla, abilityMoves);
           testAssert(suc);
         }
         pla = hist.presumedNextMovePla;
@@ -2126,7 +2126,7 @@ static void replayGameUpToMove(const FinishedGameData* finishedGameData, int mov
     if(finishedGameData->endHist.flyingKnifeTriggerHistory.size() == finishedGameData->endHist.moveHistory.size() &&
        finishedGameData->endHist.flyingKnifeTriggerHistory[i] > 0) {
       int abilityMoves = finishedGameData->endHist.flyingKnifeTriggerHistory[i];
-      bool suc = hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), pla, abilityMoves);
+      bool suc = hist.applyFlyingKnifeAbility(board, (int)hist.moveHistory.size(), pla, abilityMoves);
       if(!suc) {
         if(rules == finishedGameData->startHist.rules && hist.encorePhase == 0)
           throw StringError("Invalid flying knife trigger when replaying to fork game?");

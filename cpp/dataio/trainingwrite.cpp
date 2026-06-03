@@ -1071,28 +1071,13 @@ bool TrainingDataWriter::flushIfNonempty(string& resultingFilename) {
   return true;
 }
 
-static bool canDecomposeFlyingKnifeRun(int extraMoves, int knives, int sickles) {
-  if(extraMoves < 0)
-    return false;
-  for(int knivesUsed = 0; knivesUsed <= knives; knivesUsed++) {
-    for(int sicklesUsed = 0; sicklesUsed <= sickles; sicklesUsed++) {
-      int abilityMoves =
-        knivesUsed * FlyingKnifeConfig::getKnifeMoves() +
-        sicklesUsed * FlyingKnifeConfig::getSickleMoves();
-      if(abilityMoves == extraMoves)
-        return true;
-    }
-  }
-  return false;
-}
-
 static bool applyFlyingKnifeTrigger(
   Player pla,
   int abilityMoves,
   const Board& board,
   BoardHistory& hist
 ) {
-  return hist.applyFlyingKnifeAbilityForReplay(board, (int)hist.moveHistory.size(), pla, abilityMoves);
+  return hist.applyFlyingKnifeAbility(board, (int)hist.moveHistory.size(), pla, abilityMoves);
 }
 
 static bool maybeApplyFlyingKnifeTriggerForReplay(
@@ -1123,9 +1108,9 @@ static bool maybeApplyFlyingKnifeTriggerForReplay(
   int knives = hist.fkState.getKnivesRemaining(pla);
   int sickles = hist.fkState.getSicklesRemaining(pla);
   int abilityMoves = 0;
-  if(knives > 0 && canDecomposeFlyingKnifeRun(extraMoves - FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles))
+  if(knives > 0 && FlyingKnifeConfig::canDecomposeRun(extraMoves - FlyingKnifeConfig::getKnifeMoves(), knives - 1, sickles))
     abilityMoves = FlyingKnifeConfig::getKnifeMoves();
-  else if(sickles > 0 && canDecomposeFlyingKnifeRun(extraMoves - FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1))
+  else if(sickles > 0 && FlyingKnifeConfig::canDecomposeRun(extraMoves - FlyingKnifeConfig::getSickleMoves(), knives, sickles - 1))
     abilityMoves = FlyingKnifeConfig::getSickleMoves();
   else
     return false;

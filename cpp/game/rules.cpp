@@ -14,6 +14,48 @@ bool FlyingKnifeConfig::isEnabled() const {
          whiteKnifeCount > 0 || whiteSickleCount > 0;
 }
 
+bool FlyingKnifeConfig::canDecomposeRun(int extraMoves, int knives, int sickles) {
+  return canDecomposeRun(extraMoves, 0, knives, sickles);
+}
+
+bool FlyingKnifeConfig::canDecomposeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles) {
+  if(extraMoves < 0)
+    return false;
+  for(int knivesUsed = 0; knivesUsed <= knives; knivesUsed++) {
+    for(int sicklesUsed = 0; sicklesUsed <= sickles; sicklesUsed++) {
+      int fullAbilityMoves =
+        knivesUsed * getKnifeMoves() +
+        sicklesUsed * getSickleMoves();
+
+      if(remainingMovesAtEnd == 0 && fullAbilityMoves == extraMoves)
+        return true;
+      if(remainingMovesAtEnd > 0 &&
+         remainingMovesAtEnd <= getKnifeMoves() &&
+         knivesUsed < knives &&
+         fullAbilityMoves + (getKnifeMoves() - remainingMovesAtEnd) == extraMoves)
+        return true;
+      if(remainingMovesAtEnd > 0 &&
+         remainingMovesAtEnd <= getSickleMoves() &&
+         sicklesUsed < sickles &&
+         fullAbilityMoves + (getSickleMoves() - remainingMovesAtEnd) == extraMoves)
+        return true;
+    }
+  }
+  return false;
+}
+
+bool FlyingKnifeConfig::canDecomposeAfterAbility(
+  int extraMoves,
+  int remainingMovesAtEnd,
+  int abilityMoves,
+  int knives,
+  int sickles
+) {
+  if(extraMoves < abilityMoves)
+    return remainingMovesAtEnd == abilityMoves - extraMoves;
+  return canDecomposeRun(extraMoves - abilityMoves, remainingMovesAtEnd, knives, sickles);
+}
+
 bool FlyingKnifeConfig::operator==(const FlyingKnifeConfig& other) const {
   return triggerRangeStart == other.triggerRangeStart &&
          triggerRangeEnd == other.triggerRangeEnd &&

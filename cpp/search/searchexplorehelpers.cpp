@@ -719,7 +719,7 @@ static void applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player p
   thread.history.presumedNextMovePla = childNextPla;
   if(chanceOutcome == 1 || chanceOutcome == 2) {
     int abilityMoves = chanceOutcome == 1 ? FlyingKnifeConfig::getKnifeMoves() : FlyingKnifeConfig::getSickleMoves();
-    bool suc = thread.history.applyFlyingKnifeAbilityForReplay(thread.board, (int)thread.history.moveHistory.size(), pla, abilityMoves);
+    bool suc = thread.history.applyFlyingKnifeAbility(thread.board, (int)thread.history.moveHistory.size(), pla, abilityMoves);
     testAssert(suc);
   }
   else if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&

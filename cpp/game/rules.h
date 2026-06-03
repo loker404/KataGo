@@ -17,6 +17,9 @@ struct FlyingKnifeConfig {
   bool isEnabled() const;
   static int getKnifeMoves() { return 2; }
   static int getSickleMoves() { return 3; }
+  static bool canDecomposeRun(int extraMoves, int knives, int sickles);
+  static bool canDecomposeRun(int extraMoves, int remainingMovesAtEnd, int knives, int sickles);
+  static bool canDecomposeAfterAbility(int extraMoves, int remainingMovesAtEnd, int abilityMoves, int knives, int sickles);
 
   nlohmann::json toJson() const;
   static FlyingKnifeConfig fromString(const std::string& s);
