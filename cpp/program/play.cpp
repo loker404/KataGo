@@ -1692,7 +1692,20 @@ FinishedGameData* Play::runGame(
     //Flying knife: if no sequence is active, check if we should trigger a new ability
     if(hist.rules.fkConfig.isEnabled() && !hist.fkState.isInSequence()) {
       int moveNumber = (int)hist.moveHistory.size();
-      hist.checkAndActivateAbility(board, moveNumber, gameRand, hist.moveHistory.back().pla);
+      Player movePla = hist.moveHistory.back().pla;
+      int abilityType = hist.checkAndActivateAbility(board, moveNumber, gameRand, movePla);
+      if(abilityType > 0) {
+        auto syncBotFlyingKnifeState = [&](Search* bot) {
+          bool botSuc = bot->rootHistory.applyFlyingKnifeAbility(bot->rootBoard, moveNumber, movePla, abilityType);
+          testAssert(botSuc);
+          bot->rootPla = bot->rootHistory.presumedNextMovePla;
+          bot->rootKoHashTable->recompute(bot->rootHistory);
+          bot->clearSearch();
+        };
+        syncBotFlyingKnifeState(botB);
+        if(botB != botW)
+          syncBotFlyingKnifeState(botW);
+      }
     }
     //Use presumedNextMovePla to handle flying knife sequences correctly.
     pla = hist.presumedNextMovePla;

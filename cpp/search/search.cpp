@@ -1227,6 +1227,26 @@ bool Search::playoutDescend(
   SearchThread& thread, SearchNode& node,
   bool isRoot
 ) {
+  auto ensureChanceNodeExpanded0 = [](SearchNode& chanceNode, SearchNodeState& chanceNodeState) {
+    chanceNodeState = chanceNode.state.load(std::memory_order_acquire);
+    while(chanceNodeState < SearchNode::STATE_EXPANDED0) {
+      if(chanceNodeState != SearchNode::STATE_UNEVALUATED)
+        return false;
+      SearchNodeState expected = SearchNode::STATE_UNEVALUATED;
+      bool suc = chanceNode.state.compare_exchange_strong(
+        expected, SearchNode::STATE_EVALUATING, std::memory_order_seq_cst
+      );
+      if(!suc) {
+        chanceNodeState = expected;
+        continue;
+      }
+      chanceNode.initializeChildren();
+      chanceNode.state.store(SearchNode::STATE_EXPANDED0, std::memory_order_seq_cst);
+      chanceNodeState = SearchNode::STATE_EXPANDED0;
+    }
+    return true;
+  };
+
   //Hit terminal node, finish
   //forceNonTerminal marks special nodes where we cannot end the game, and is set IF they would normally be finished.
   //This includes the root if the root would be game-ended, since if we are searching a position
@@ -1429,17 +1449,8 @@ bool Search::playoutDescend(
         // Publish chance nodes only after children are initialized. Otherwise
         // another thread can route through the child slot while the node is
         // still STATE_UNEVALUATED and attempt to expand it as a full node.
-        SearchNodeState chanceNodeState = chanceNode->state.load(std::memory_order_acquire);
-        if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
-          std::lock_guard<std::mutex> lock(mutexPool->getMutex(chanceNode->mutexIdx));
-          chanceNodeState = chanceNode->state.load(std::memory_order_acquire);
-          if(chanceNodeState == SearchNode::STATE_UNEVALUATED) {
-            chanceNode->initializeChildren();
-            chanceNode->state.store(SearchNode::STATE_EXPANDED0, std::memory_order_release);
-            chanceNodeState = SearchNode::STATE_EXPANDED0;
-          }
-        }
-        if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
+        SearchNodeState chanceNodeState;
+        if(!ensureChanceNodeExpanded0(*chanceNode, chanceNodeState)) {
           chanceNode->virtualLosses.fetch_add(-1,std::memory_order_release);
           thread.shouldCountPlayout = false;
           return false;
@@ -1524,17 +1535,8 @@ bool Search::playoutDescend(
             thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
           );
 
-        SearchNodeState chanceNodeState = child->state.load(std::memory_order_acquire);
-        if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
-          std::lock_guard<std::mutex> lock(mutexPool->getMutex(child->mutexIdx));
-          chanceNodeState = child->state.load(std::memory_order_acquire);
-          if(chanceNodeState == SearchNode::STATE_UNEVALUATED) {
-            child->initializeChildren();
-            child->state.store(SearchNode::STATE_EXPANDED0, std::memory_order_release);
-            chanceNodeState = SearchNode::STATE_EXPANDED0;
-          }
-        }
-        if(chanceNodeState < SearchNode::STATE_EXPANDED0) {
+        SearchNodeState chanceNodeState;
+        if(!ensureChanceNodeExpanded0(*child, chanceNodeState)) {
           child->virtualLosses.fetch_add(-1,std::memory_order_release);
           thread.shouldCountPlayout = false;
           return false;
