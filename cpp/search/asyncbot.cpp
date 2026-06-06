@@ -189,9 +189,7 @@ void AsyncBot::genMoveAsync(Player movePla, int searchId, const TimeControls& tc
   if(isKilled)
     return;
 
-  search->syncRootPlaWithHistory();
-  if(movePla != search->rootPla)
-    search->setPlayerAndClearHistory(movePla);
+  search->setPlayerIfNew(movePla);
 
   queuedSearchId = searchId;
   queuedOnMove = onMove;
@@ -267,9 +265,7 @@ void AsyncBot::analyzeAsync(
   if(isKilled)
     return;
 
-  search->syncRootPlaWithHistory();
-  if(movePla != search->rootPla)
-    search->setPlayerAndClearHistory(movePla);
+  search->setPlayerIfNew(movePla);
 
   queuedSearchId = 0;
   queuedOnMove = nullptr;
@@ -316,9 +312,7 @@ void AsyncBot::genMoveAsyncAnalyze(
   if(isKilled)
     return;
 
-  search->syncRootPlaWithHistory();
-  if(movePla != search->rootPla)
-    search->setPlayerAndClearHistory(movePla);
+  search->setPlayerIfNew(movePla);
 
   queuedSearchId = searchId;
   queuedOnMove = onMove;

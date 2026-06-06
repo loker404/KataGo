@@ -284,6 +284,8 @@ int ConstSearchNodeChildrenReference::iterateAndCountChildren() const {
 //Returns false: failure since another thread is handling it.
 //Thread-safe.
 bool SearchNode::maybeExpandChildrenCapacityForNewChild(SearchNodeState& stateValue, int numChildrenFullPlusOne) {
+  if(numChildrenFullPlusOne > SearchChildrenSizes::SIZE2TOTAL)
+    return false;
   int capacity = getChildrenCapacity(stateValue);
   assert(numChildrenFullPlusOne <= SearchChildrenSizes::SIZE2TOTAL);
   if(capacity < numChildrenFullPlusOne) {

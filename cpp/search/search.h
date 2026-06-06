@@ -222,6 +222,11 @@ struct Search {
 
   void setPlayerAndClearHistory(Player pla);
   void setPlayerIfNew(Player pla);
+  // Synchronizes rootPla to rootHistory.presumedNextMovePla after rules that
+  // allow non-alternating turns, such as flying knife. Public entry points that
+  // may run/search/play from the current root history should go through
+  // setPlayerIfNew, makeMove, runWholeSearch, or this helper before reading or
+  // comparing rootPla.
   void syncRootPlaWithHistory();
   void setKomiIfNew(float newKomi); //Does not clear history, does clear search unless komi is equal.
   bool setFlyingKnifeState(Player pla, int remainingMoves, bool consumeAbility, std::string& error);
