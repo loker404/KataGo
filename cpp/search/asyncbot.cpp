@@ -189,6 +189,7 @@ void AsyncBot::genMoveAsync(Player movePla, int searchId, const TimeControls& tc
   if(isKilled)
     return;
 
+  search->syncRootPlaWithHistory();
   if(movePla != search->rootPla)
     search->setPlayerAndClearHistory(movePla);
 
@@ -238,6 +239,7 @@ void AsyncBot::ponder(double sf) {
   if(isKilled)
     return;
 
+  search->syncRootPlaWithHistory();
   queuedSearchId = 0;
   queuedOnMove = nullptr;
   isRunning = true;
@@ -265,6 +267,7 @@ void AsyncBot::analyzeAsync(
   if(isKilled)
     return;
 
+  search->syncRootPlaWithHistory();
   if(movePla != search->rootPla)
     search->setPlayerAndClearHistory(movePla);
 
@@ -313,6 +316,7 @@ void AsyncBot::genMoveAsyncAnalyze(
   if(isKilled)
     return;
 
+  search->syncRootPlaWithHistory();
   if(movePla != search->rootPla)
     search->setPlayerAndClearHistory(movePla);
 
@@ -464,7 +468,21 @@ void AsyncBot::internalSearchThreadLoop() {
         if(callbackLoopShouldStop.load())
           return;
         callbackLock.unlock();
-        analyzeCallbackLocal(search);
+        try {
+          analyzeCallbackLocal(search);
+        }
+        catch(const exception& e) {
+          search->logger->write(string("ERROR: Async bot analyze callback failed: ") + e.what());
+          return;
+        }
+        catch(const string& e) {
+          search->logger->write("ERROR: Async bot analyze callback failed: " + e);
+          return;
+        }
+        catch(...) {
+          search->logger->write("ERROR: Async bot analyze callback failed with unexpected throw");
+          return;
+        }
         callbackLock.lock();
       }
     };
@@ -478,6 +496,7 @@ void AsyncBot::internalSearchThreadLoop() {
       return shouldStopNow.load(std::memory_order_acquire);
     };
 
+    search->syncRootPlaWithHistory();
     search->runWholeSearch(&searchBegun,&shouldStopEarly,pondering,tc,searchFactor);
     Loc moveLoc = search->getChosenMoveLoc();
 

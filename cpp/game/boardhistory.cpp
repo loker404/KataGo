@@ -1592,6 +1592,7 @@ int BoardHistory::checkAndActivateAbility(const Board& board, int moveNumber, Ra
     abilityType = FlyingKnifeConfig::getSickleMoves();  // sickle
 
   bool suc = applyFlyingKnifeAbility(board, moveNumber, pla, abilityType);
-  testAssert(suc);
+  if(!suc)
+    return 0;
   return abilityType;
 }

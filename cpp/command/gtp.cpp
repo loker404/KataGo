@@ -371,6 +371,7 @@ struct GTPEngine {
   Board initialBoard;
   Player initialPla;
   vector<Move> moveHistory;
+  vector<int> flyingKnifeTriggerHistory;
 
   vector<double> recentWinLossValues;
   double lastSearchFactor;
@@ -585,6 +586,10 @@ struct GTPEngine {
     initialBoard = newInitialBoard;
     initialPla = newInitialPla;
     moveHistory = newMoveHistory;
+    if(hist.flyingKnifeTriggerHistory.size() == newMoveHistory.size())
+      flyingKnifeTriggerHistory = hist.flyingKnifeTriggerHistory;
+    else
+      flyingKnifeTriggerHistory.assign(newMoveHistory.size(), 0);
     recentWinLossValues.clear();
     updateDynamicPDA();
   }
@@ -639,11 +644,50 @@ struct GTPEngine {
     );
   }
 
-  bool play(Loc loc, Player pla) {
+  void syncRootPlayerWithHistoryIfNeeded() {
+    Search* search = bot->getSearchStopAndWait();
+    search->syncRootPlaWithHistory();
+  }
+
+  int applyFlyingKnifeTriggerAfterMove(int recordedAbilityMoves, bool clearSearchAfterTrigger = true) {
+    Search* search = bot->getSearchStopAndWait();
+    BoardHistory& hist = search->rootHistory;
+    int abilityType = 0;
+    if(hist.rules.fkConfig.isEnabled()) {
+      int moveNumber = (int)hist.moveHistory.size();
+      if(moveNumber > 0 && !hist.fkState.isInSequence()) {
+        Player movePla = hist.moveHistory.back().pla;
+        if(recordedAbilityMoves >= 0) {
+          abilityType = recordedAbilityMoves;
+          if(abilityType > 0) {
+            bool suc = hist.applyFlyingKnifeAbility(search->rootBoard, moveNumber, movePla, abilityType);
+            if(!suc)
+              abilityType = 0;
+          }
+        }
+        else {
+          abilityType = hist.checkAndActivateAbility(search->rootBoard, moveNumber, gtpRand, movePla);
+        }
+        if(abilityType > 0) {
+          search->rootPla = hist.presumedNextMovePla;
+          search->rootKoHashTable->recompute(hist);
+          if(clearSearchAfterTrigger)
+            search->clearSearch();
+        }
+      }
+    }
+    return abilityType;
+  }
+
+  bool play(Loc loc, Player pla, int recordedAbilityMoves = -1) {
     testAssert(bot->getRootHist().rules == currentRules);
+    syncRootPlayerWithHistoryIfNeeded();
     bool suc = bot->makeMove(loc,pla,preventEncore);
-    if(suc)
+    if(suc) {
+      int abilityType = applyFlyingKnifeTriggerAfterMove(recordedAbilityMoves);
       moveHistory.emplace_back(loc,pla);
+      flyingKnifeTriggerHistory.push_back(abilityType);
+    }
     return suc;
   }
 
@@ -653,6 +697,7 @@ struct GTPEngine {
     testAssert(bot->getRootHist().rules == currentRules);
 
     vector<Move> moveHistoryCopy = moveHistory;
+    vector<int> flyingKnifeTriggerHistoryCopy = flyingKnifeTriggerHistory;
 
     Board undoneBoard = initialBoard;
     BoardHistory undoneHist(undoneBoard,initialPla,currentRules,0);
@@ -663,7 +708,8 @@ struct GTPEngine {
     for(int i = 0; i<moveHistoryCopy.size()-1; i++) {
       Loc moveLoc = moveHistoryCopy[i].loc;
       Player movePla = moveHistoryCopy[i].pla;
-      bool suc = play(moveLoc,movePla);
+      int recordedAbilityMoves = i < flyingKnifeTriggerHistoryCopy.size() ? flyingKnifeTriggerHistoryCopy[i] : -1;
+      bool suc = play(moveLoc,movePla,recordedAbilityMoves);
       testAssert(suc);
     }
     return true;
@@ -682,6 +728,7 @@ struct GTPEngine {
     }
 
     vector<Move> moveHistoryCopy = moveHistory;
+    vector<int> flyingKnifeTriggerHistoryCopy = flyingKnifeTriggerHistory;
 
     Board board = initialBoard;
     BoardHistory hist(board,initialPla,newRules,0);
@@ -692,7 +739,8 @@ struct GTPEngine {
     for(int i = 0; i<moveHistoryCopy.size(); i++) {
       Loc moveLoc = moveHistoryCopy[i].loc;
       Player movePla = moveHistoryCopy[i].pla;
-      bool suc = play(moveLoc,movePla);
+      int recordedAbilityMoves = i < flyingKnifeTriggerHistoryCopy.size() ? flyingKnifeTriggerHistoryCopy[i] : -1;
+      bool suc = play(moveLoc,movePla,recordedAbilityMoves);
 
       //Because internally we use a highly tolerant test, we don't expect this to actually trigger
       //even if a rules change did make some earlier moves illegal. But this check simply futureproofs
@@ -1019,6 +1067,7 @@ struct GTPEngine {
     const std::function<void(const string&, bool)>& printGTPResponse,
     bool& maybeStartPondering
   ) {
+    syncRootPlayerWithHistoryIfNeeded();
     bool onMoveWasCalled = false;
     Loc genmoveMoveLoc = Board::NULL_LOC;
     auto onMove = [&genmoveMoveLoc,&onMoveWasCalled,this](Loc moveLoc, int searchId, Search* search) noexcept {
@@ -1036,8 +1085,6 @@ struct GTPEngine {
     handleGenMoveResult(pla,bot->getSearchStopAndWait(),logger,gargs,args,genmoveMoveLoc,response,responseIsError,moveLocToPlay);
     if(moveLocToPlay != Board::NULL_LOC && playChosenMove) {
       bool suc = bot->makeMove(moveLocToPlay,pla,preventEncore);
-      if(suc)
-        moveHistory.emplace_back(moveLocToPlay,pla);
       if(!suc) {
         ostringstream sout;
         sout << "Engine chose move but makeMove failed" << "\n";
@@ -1049,25 +1096,18 @@ struct GTPEngine {
       }
 
       //Check for flying knife trigger after the move
-      Search* search = bot->getSearchStopAndWait();
-      BoardHistory& hist = search->rootHistory;
-      bool shouldClearSearchForFlyingKnife = false;
-      if(hist.rules.fkConfig.isEnabled() && !responseIsError && response != "resign") {
-        int moveNumber = (int)hist.moveHistory.size();
-        if(moveNumber > 0 && !hist.fkState.isInSequence()) {
-          int abilityType = hist.checkAndActivateAbility(search->rootBoard, moveNumber, gtpRand, hist.moveHistory.back().pla);
-          if(abilityType > 0) {
-            logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
-            search->rootPla = hist.presumedNextMovePla;
-            search->rootKoHashTable->recompute(hist);
-            shouldClearSearchForFlyingKnife = true;
-          }
-        }
-      }
+      int abilityType = 0;
+      bool shouldClearSearchForFlyingKnife = !responseIsError && response != "resign";
+      if(shouldClearSearchForFlyingKnife)
+        abilityType = applyFlyingKnifeTriggerAfterMove(-1, false);
+      if(abilityType > 0)
+        logger.write("Flying knife/sickle triggered: " + Global::intToString(abilityType) + " extra moves");
+      moveHistory.emplace_back(moveLocToPlay,pla);
+      flyingKnifeTriggerHistory.push_back(abilityType);
 
       printGTPResponse(response,responseIsError);
-      if(shouldClearSearchForFlyingKnife)
-        search->clearSearch();
+      if(abilityType > 0)
+        bot->getSearchStopAndWait()->clearSearch();
       maybeStartPondering = true;
     }
     else {
@@ -1422,6 +1462,7 @@ struct GTPEngine {
 
   void analyze(Player pla, const AnalyzeArgs& args) {
     testAssert(args.analyzing);
+    syncRootPlayerWithHistoryIfNeeded();
     if(isGenmoveParams) {
       bot->setParams(analysisParams);
       isGenmoveParams = false;
@@ -3202,6 +3243,7 @@ int MainCmds::gtp(const vector<string>& args) {
       command == "kata-search_analyze" ||
       command == "kata-search_analyze_cancellable"
     ) {
+      engine->syncRootPlayerWithHistoryIfNeeded();
       Player pla = engine->bot->getRootPla();
       bool parseFailed = false;
       GTPEngine::AnalyzeArgs analyzeArgs = parseAnalyzeCommand(command, pieces, pla, parseFailed, engine);
@@ -3571,6 +3613,7 @@ int MainCmds::gtp(const vector<string>& args) {
     }
 
     else if(command == "analyze" || command == "lz-analyze" || command == "kata-analyze") {
+      engine->syncRootPlayerWithHistoryIfNeeded();
       Player pla = engine->bot->getRootPla();
       bool parseFailed = false;
       GTPEngine::AnalyzeArgs analyzeArgs = parseAnalyzeCommand(command, pieces, pla, parseFailed, engine);

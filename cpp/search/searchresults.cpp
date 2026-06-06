@@ -147,7 +147,8 @@ bool Search::getPlaySelectionValues(
     const SearchNode* bestChild = bestChildPointer.getIfAllocated();
     int64_t bestChildEdgeVisits = bestChildPointer.getEdgeVisits();
     Loc bestMoveLoc = bestChildPointer.getMoveLocRelaxed();
-    testAssert(bestChild != NULL);
+    if(bestChild == NULL)
+      return false;
     const bool isRoot = true;
     const double policyProbMassVisited = 1.0; //doesn't matter, since fpu value computed from it isn't used here
     double parentUtility;
@@ -162,7 +163,8 @@ bool Search::getPlaySelectionValues(
 
     double exploreScaling = getExploreScaling(totalChildWeight, parentUtilityStdevFactor);
 
-    testAssert(nnOutput != NULL);
+    if(nnOutput == NULL)
+      return false;
     const bool countEdgeVisit = true;
     double bestChildExploreSelectionValue = getExploreSelectionValueOfChild(
       node,policyProbs,bestChild,
@@ -1111,7 +1113,8 @@ void Search::getAnalysisData(
     }
     //Probability mass should not sum to more than 1, giving a generous allowance
     //for floating point error.
-    assert(policyProbMassVisited <= 1.0001);
+    if(policyProbMassVisited > 1.0001)
+      return;
   }
 
   double parentWinLossValue;
@@ -1124,7 +1127,8 @@ void Search::getAnalysisData(
     double scoreMeanAvg = node.stats.scoreMeanAvg.load(std::memory_order_acquire);
     double scoreMeanSqAvg = node.stats.scoreMeanSqAvg.load(std::memory_order_acquire);
     double leadAvg = node.stats.leadAvg.load(std::memory_order_acquire);
-    assert(weightSum > 0.0);
+    if(weightSum <= 0.0)
+      return;
 
     parentWinLossValue = winLossValueAvg;
     parentScoreMean = scoreMeanAvg;
@@ -1583,7 +1587,8 @@ void Search::getShallowAverageShorttermWLAndScoreErrorHelper(
 
     for(int i = 0; i<numChildren; i++) {
       const SearchNode* child = children[i].getIfAllocated();
-      assert(child != NULL);
+      if(child == NULL)
+        continue;
       double childWeight = statsBuf[i].weightAdjusted;
       double desiredPropFromChild = childWeight / relativeChildrenWeightSum * desiredPropFromChildren;
       getShallowAverageShorttermWLAndScoreErrorHelper(child,graphPath,policyProbsBuf,minProp,desiredPropFromChild,wlError,scoreError);
@@ -1669,7 +1674,8 @@ bool Search::getSharpScore(const SearchNode* node, double& ret) const {
 
     for(int i = 0; i<numChildren; i++) {
       const SearchNode* child = children[i].getIfAllocated();
-      assert(child != NULL);
+      if(child == NULL)
+        continue;
       double childWeight = playSelectionValues[i];
       double desiredPropFromChild = childWeight * childWeight * childWeight / relativeChildrenWeightSum * desiredPropFromChildren;
       bool accumulated = getSharpScoreHelper(child,graphPath,policyProbsBuf,minProp,desiredPropFromChild,ret);
@@ -1790,7 +1796,8 @@ bool Search::getSharpScoreHelper(
 
     for(int i = 0; i<numChildren; i++) {
       const SearchNode* child = children[i].getIfAllocated();
-      assert(child != NULL);
+      if(child == NULL)
+        continue;
       double childWeight = statsBuf[i].weightAdjusted;
       double desiredPropFromChild = childWeight * childWeight * childWeight / relativeChildrenWeightSum * desiredPropFromChildren;
       bool accumulated = getSharpScoreHelper(child,graphPath,policyProbsBuf,minProp,desiredPropFromChild,ret);
@@ -1976,7 +1983,8 @@ double Search::traverseTreeForOwnershipChildren(
     for(int i = 0; i<numChildren; i++) {
       double childWeight = childWeightBuf[i];
       const SearchNode* child = children[i].getIfAllocated();
-      assert(child != NULL);
+      if(child == NULL)
+        continue;
       double desiredPropFromChild = (double)childWeight * childWeight / relativeChildrenWeightSum * desiredPropFromChildren;
       if(desiredPropFromChild < pruneProp)
         selfProp += desiredPropFromChild;

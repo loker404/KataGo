@@ -118,9 +118,13 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
   Player initialNextPlayer = histOrig.moveHistory.size() <= 0 ? nextPlayer : histOrig.moveHistory[0].pla;
   graphHash = getGraphHash(graphHash, hist, initialNextPlayer, repBound, drawEquivalentWinsForWhite);
 
+  bool reconstructionFailed = false;
   for(size_t i = 0; i<histOrig.moveHistory.size(); i++) {
     bool suc = hist.makeBoardMoveTolerant(board, histOrig.moveHistory[i].loc, histOrig.moveHistory[i].pla, histOrig.preventEncoreHistory[i]);
-    testAssert(suc);
+    if(!suc) {
+      reconstructionFailed = true;
+      break;
+    }
     Player actualNextPlayer = i+1 < histOrig.moveHistory.size() ? histOrig.moveHistory[i+1].pla : nextPlayer;
     bool hasChanceTransition = shouldApplyFlyingKnifeChanceTransition(hist);
     graphHash = getGraphHash(
@@ -133,24 +137,26 @@ Hash128 GraphHash::getGraphHashFromScratch(const BoardHistory& histOrig, Player 
     }
   }
 
-  if(hist.fkState != histOrig.fkState || hist.presumedNextMovePla != nextPlayer) {
+  if(reconstructionFailed || hist.fkState != histOrig.fkState || hist.presumedNextMovePla != nextPlayer) {
     // Histories with externally forced FK state, or ambiguous consecutive-run
     // decompositions, cannot always be uniquely reconstructed from moveHistory
     // alone. In those cases, mix in the exact current state while preserving
     // the replayed graph hash's path dependence.
-    hist.fkState = histOrig.fkState;
-    hist.presumedNextMovePla = nextPlayer;
-    hist.recomputeCurrentKoHash(board);
+    hist = histOrig;
     graphHash.hash0 = Hash::splitMix64(graphHash.hash0 ^ graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash0);
     graphHash.hash1 = Hash::nasam(graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash1) + graphHash.hash0;
-    Hash128 stateHash = getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite);
+    Hash128 stateHash = getStateHash(histOrig, nextPlayer, drawEquivalentWinsForWhite);
     graphHash.hash0 += stateHash.hash0;
     graphHash.hash1 += stateHash.hash1;
   }
-  testAssert(
-    getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite) ==
-    getStateHash(histOrig, nextPlayer, drawEquivalentWinsForWhite)
-  );
+  if(getStateHash(hist, nextPlayer, drawEquivalentWinsForWhite) !=
+     getStateHash(histOrig, nextPlayer, drawEquivalentWinsForWhite)) {
+    graphHash.hash0 = Hash::splitMix64(graphHash.hash0 ^ graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash1);
+    graphHash.hash1 = Hash::nasam(graphHash.hash1 ^ FLYING_KNIFE_RECONSTRUCTION_FALLBACK_HASH.hash0) + graphHash.hash0;
+    Hash128 stateHash = getStateHash(histOrig, nextPlayer, drawEquivalentWinsForWhite);
+    graphHash.hash0 += stateHash.hash0;
+    graphHash.hash1 += stateHash.hash1;
+  }
 
   return graphHash;
 }

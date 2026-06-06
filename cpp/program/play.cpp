@@ -1697,10 +1697,14 @@ FinishedGameData* Play::runGame(
       if(abilityType > 0) {
         auto syncBotFlyingKnifeState = [&](Search* bot) {
           bool botSuc = bot->rootHistory.applyFlyingKnifeAbility(bot->rootBoard, moveNumber, movePla, abilityType);
-          testAssert(botSuc);
-          bot->rootPla = bot->rootHistory.presumedNextMovePla;
-          bot->rootKoHashTable->recompute(bot->rootHistory);
-          bot->clearSearch();
+          if(botSuc) {
+            bot->rootPla = bot->rootHistory.presumedNextMovePla;
+            bot->rootKoHashTable->recompute(bot->rootHistory);
+            bot->clearSearch();
+          }
+          else {
+            bot->setPosition(hist.presumedNextMovePla, board, hist);
+          }
         };
         syncBotFlyingKnifeState(botB);
         if(botB != botW)

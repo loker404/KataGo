@@ -222,6 +222,7 @@ struct Search {
 
   void setPlayerAndClearHistory(Player pla);
   void setPlayerIfNew(Player pla);
+  void syncRootPlaWithHistory();
   void setKomiIfNew(float newKomi); //Does not clear history, does clear search unless komi is equal.
   bool setFlyingKnifeState(Player pla, int remainingMoves, bool consumeAbility, std::string& error);
   void clearFlyingKnifeState();

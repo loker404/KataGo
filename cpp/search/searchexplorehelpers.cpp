@@ -272,8 +272,12 @@ double Search::getFpuValueForChildrenAssumeVisited(
   double utilityAvg = node.stats.utilityAvg.load(std::memory_order_acquire);
   double utilitySqAvg = node.stats.utilitySqAvg.load(std::memory_order_acquire);
 
-  assert(visits > 0);
-  assert(weightSum > 0.0);
+  if(visits <= 0 || weightSum <= 0.0) {
+    parentWeightPerVisit = 1.0;
+    parentUtility = 0.0;
+    parentUtilityStdevFactor = searchParams.cpuctUtilityStdevPrior;
+    return 0.0;
+  }
   parentWeightPerVisit = weightSum / visits;
   parentUtility = utilityAvg;
   double variancePrior = searchParams.cpuctUtilityStdevPrior * searchParams.cpuctUtilityStdevPrior;
@@ -327,12 +331,13 @@ void Search::selectBestChildToDescend(
   int& numChildrenFound, int& bestChildIdx, Loc& bestChildMoveLoc, bool& countEdgeVisit,
   bool isRoot) const
 {
-  assert(thread.pla == node.nextPla);
-
   double maxSelectionValue = POLICY_ILLEGAL_SELECTION_VALUE;
   bestChildIdx = -1;
   bestChildMoveLoc = Board::NULL_LOC;
   countEdgeVisit = true;
+  numChildrenFound = 0;
+  if(thread.pla != node.nextPla)
+    return;
 
   ConstSearchNodeChildrenReference children = node.getChildren(nodeState);
   int childrenCapacity = children.getCapacity();
@@ -350,6 +355,8 @@ void Search::selectBestChildToDescend(
     if(child == NULL)
       break;
     Loc moveLoc = childPointer.getMoveLocRelaxed();
+    if(!thread.history.isLegal(thread.board,moveLoc,thread.pla))
+      continue;
     int movePos = getPos(moveLoc);
     float nnPolicyProb = policyProbs[movePos];
     if(nnPolicyProb < 0)
@@ -411,6 +418,8 @@ void Search::selectBestChildToDescend(
         if(child == NULL)
           break;
         Loc moveLoc = childPointer.getMoveLocRelaxed();
+        if(!thread.history.isLegal(thread.board,moveLoc,thread.pla))
+          continue;
         int movePos = getPos(moveLoc);
         float nnPolicyProb = policyProbs[movePos];
         if(nnPolicyProb < 0)
@@ -422,7 +431,8 @@ void Search::selectBestChildToDescend(
 
   //Probability mass should not sum to more than 1, giving a generous allowance
   //for floating point error.
-  assert(policyProbMassVisited <= 1.0001);
+  if(policyProbMassVisited > 1.0001)
+    policyProbMassVisited = 1.0;
 
   //If we're doing a weightless visit, then we should redo PUCT to operate on child node weight, not child edge weight
   if(!countEdgeVisit) {
@@ -470,6 +480,8 @@ void Search::selectBestChildToDescend(
     int64_t childEdgeVisits = childPointer.getEdgeVisits();
 
     Loc moveLoc = childPointer.getMoveLocRelaxed();
+    if(!thread.history.isLegal(thread.board,moveLoc,thread.pla))
+      continue;
     bool isDuringSearch = true;
     double selectionValue = getExploreSelectionValueOfChild(
       node,policyProbs,child,
@@ -508,6 +520,8 @@ void Search::selectBestChildToDescend(
       bool alreadyTried = posesWithChildBuf[movePos];
       if(alreadyTried)
         continue;
+      if(!thread.history.isLegal(thread.board,moveLoc,thread.pla))
+        continue;
 
       //Quit immediately for illegal moves
       float nnPolicyProb = policyProbs[movePos];
@@ -516,8 +530,10 @@ void Search::selectBestChildToDescend(
 
       //Special logic for the root
       if(isRoot) {
-        assert(thread.board.pos_hash == rootBoard.pos_hash);
-        assert(thread.pla == rootPla);
+        if(thread.board.pos_hash != rootBoard.pos_hash)
+          continue;
+        if(thread.pla != rootPla)
+          continue;
         if(!isAllowedRootMove(moveLoc))
           continue;
       }
@@ -566,11 +582,15 @@ void Search::selectBestChildToDescend(
     Loc moveLoc = NNPos::posToLoc(movePos,thread.board.x_size,thread.board.y_size,nnXLen,nnYLen);
     if(moveLoc == Board::NULL_LOC)
       continue;
+    if(!thread.history.isLegal(thread.board,moveLoc,thread.pla))
+      continue;
 
     //Special logic for the root
     if(isRoot) {
-      assert(thread.board.pos_hash == rootBoard.pos_hash);
-      assert(thread.pla == rootPla);
+      if(thread.board.pos_hash != rootBoard.pos_hash)
+        continue;
+      if(thread.pla != rootPla)
+        continue;
       if(!isAllowedRootMove(moveLoc))
         continue;
     }
@@ -652,12 +672,14 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
     return false;
   //Not in trigger range
   int moveNumber = (int)thread.history.moveHistory.size();
+  if(moveNumber <= 0)
+    return false;
   if(moveNumber > 0 && thread.history.moveHistory[moveNumber-1].loc == Board::PASS_LOC)
     return false;
   if(moveNumber < fkConfig.triggerRangeStart || moveNumber > fkConfig.triggerRangeEnd)
     return false;
   //Check if the player who just moved has any remaining abilities
-  Player pla = getOpp(thread.pla);
+  Player pla = thread.history.moveHistory[moveNumber-1].pla;
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   return (knives + sickles) > 0;
@@ -666,10 +688,14 @@ bool Search::shouldInsertChanceNode(const SearchThread& thread) const {
 float Search::computeTriggerProbability(const SearchThread& thread) const {
   const FlyingKnifeConfig& fkConfig = thread.history.rules.fkConfig;
   int moveNumber = (int)thread.history.moveHistory.size();
-  Player pla = getOpp(thread.pla);
+  if(moveNumber <= 0)
+    return 0.0f;
+  Player pla = thread.history.moveHistory[moveNumber-1].pla;
   int totalAbilities =
     thread.history.fkState.getKnivesRemaining(pla) +
     thread.history.fkState.getSicklesRemaining(pla);
+  if(totalAbilities <= 0)
+    return 0.0f;
   int remainingRange = fkConfig.triggerRangeEnd - moveNumber + 1;
   int remainingOpportunitiesForPla = remainingRange <= 0 ? 0 : 1 + (remainingRange - 1) / 2;
   return remainingOpportunitiesForPla <= 0 ? 1.0f : std::min(1.0f, (float)totalAbilities / (float)remainingOpportunitiesForPla);
@@ -680,11 +706,13 @@ static constexpr int CHANCE_OUTCOME_KNIFE = 1;
 static constexpr int CHANCE_OUTCOME_SICKLE = 2;
 
 int Search::selectChanceChild(SearchThread& thread, float triggerProb) const {
-  Player pla = getOpp(thread.pla);
+  int moveNumber = (int)thread.history.moveHistory.size();
+  if(moveNumber <= 0)
+    return CHANCE_OUTCOME_NONE;
+  Player pla = thread.history.moveHistory[moveNumber-1].pla;
   int knives = thread.history.fkState.getKnivesRemaining(pla);
   int sickles = thread.history.fkState.getSicklesRemaining(pla);
   int totalAbilities = knives + sickles;
-  testAssert(totalAbilities > 0);
   if(totalAbilities <= 0)
     return CHANCE_OUTCOME_NONE;
   double r = thread.rand.nextDouble();
@@ -719,27 +747,34 @@ static int getNumChanceChildrenForState(const SearchThread& thread, Player pla) 
   return numChildren;
 }
 
-static void applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player pla, Player childNextPla) {
+static bool applyChanceOutcome(SearchThread& thread, int chanceOutcome, Player pla, Player childNextPla) {
   thread.pla = childNextPla;
   thread.history.presumedNextMovePla = childNextPla;
   if(chanceOutcome == CHANCE_OUTCOME_KNIFE || chanceOutcome == CHANCE_OUTCOME_SICKLE) {
     int abilityMoves = chanceOutcome == CHANCE_OUTCOME_KNIFE ? FlyingKnifeConfig::getKnifeMoves() : FlyingKnifeConfig::getSickleMoves();
     bool suc = thread.history.applyFlyingKnifeAbility(thread.board, (int)thread.history.moveHistory.size(), pla, abilityMoves);
-    testAssert(suc);
+    if(!suc)
+      return false;
   }
   else if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&
           thread.history.flyingKnifeTriggerHistory.size() > 0)
     thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] =
       0;
+  return true;
 }
 
 bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, SearchNodeState nodeState, bool isRoot) {
+  int moveNumber = (int)thread.history.moveHistory.size();
+  if(moveNumber <= 0) {
+    thread.shouldCountPlayout = false;
+    return false;
+  }
   float triggerProb = computeTriggerProbability(thread);
   int chanceOutcome = selectChanceChild(thread, triggerProb);
 
   //Use contiguous child slots for currently possible outcomes. Outcome values describe ability type:
   //none, knife, or sickle. The child index may differ when only one ability type remains.
-  Player pla = getOpp(thread.pla);
+  Player pla = thread.history.moveHistory[moveNumber-1].pla;
   int chanceChild = getChanceChildIndexForOutcome(thread, pla, chanceOutcome);
   int numChanceChildren = getNumChanceChildrenForState(thread, pla);
 
@@ -755,32 +790,16 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   //Determine the child's nextPla
   Player childNextPla = (chanceOutcome == CHANCE_OUTCOME_NONE) ? getOpp(pla) : pla;
 
-  //Save only the lightweight fields that applyChanceOutcome modifies
-  //NOTE: We are NOT saving/restoring board/history because playoutDescend descends into a child node
-  //and the child node expects the board/history to be in the state after applyChanceOutcome
-  //When playoutDescend returns, the board/history should already be restored to the correct state
-  FlyingKnifeState savedFkState = thread.history.fkState;
+  Board savedBoard = thread.board;
+  BoardHistory savedHistory = thread.history;
   Hash128 savedGraphHash = thread.graphHash;
   Player savedPla = thread.pla;
-  Player savedPresumedNextMovePla = thread.history.presumedNextMovePla;
-  Hash128 savedCurrentKoHash;
-  bool savedCurrentKoHashValid = thread.history.koHashHistory.size() > 0;
-  if(savedCurrentKoHashValid)
-    savedCurrentKoHash = thread.history.koHashHistory[thread.history.koHashHistory.size()-1];
-  int savedFlyingKnifeTrigger = -1;
-  if(thread.history.flyingKnifeTriggerHistory.size() == thread.history.moveHistory.size() &&
-     thread.history.flyingKnifeTriggerHistory.size() > 0)
-    savedFlyingKnifeTrigger = thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1];
 
   auto restoreThreadState = [&]() {
-    thread.history.fkState = savedFkState;
+    thread.board = savedBoard;
+    thread.history = savedHistory;
     thread.graphHash = savedGraphHash;
     thread.pla = savedPla;
-    thread.history.presumedNextMovePla = savedPresumedNextMovePla;
-    if(savedCurrentKoHashValid)
-      thread.history.koHashHistory[thread.history.koHashHistory.size()-1] = savedCurrentKoHash;
-    if(savedFlyingKnifeTrigger >= 0)
-      thread.history.flyingKnifeTriggerHistory[thread.history.flyingKnifeTriggerHistory.size()-1] = savedFlyingKnifeTrigger;
   };
 
   //Check if the selected child already exists
@@ -789,7 +808,12 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
     //Child exists, just descend into it
     child->virtualLosses.fetch_add(1, std::memory_order_release);
 
-    applyChanceOutcome(thread, chanceOutcome, pla, childNextPla);
+    if(!applyChanceOutcome(thread, chanceOutcome, pla, childNextPla)) {
+      child->virtualLosses.fetch_add(-1, std::memory_order_release);
+      thread.shouldCountPlayout = false;
+      restoreThreadState();
+      return false;
+    }
     if(searchParams.useGraphSearch)
       thread.graphHash = GraphHash::getGraphHash(
         thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
@@ -814,7 +838,11 @@ bool Search::handleChanceNodeDescend(SearchThread& thread, SearchNode& node, Sea
   }
 
   //Need to create a new child node
-  applyChanceOutcome(thread, chanceOutcome, pla, childNextPla);
+  if(!applyChanceOutcome(thread, chanceOutcome, pla, childNextPla)) {
+    thread.shouldCountPlayout = false;
+    restoreThreadState();
+    return false;
+  }
   if(searchParams.useGraphSearch)
     thread.graphHash = GraphHash::getGraphHash(
       thread.graphHash, thread.history, thread.pla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite

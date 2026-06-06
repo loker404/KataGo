@@ -204,8 +204,20 @@ void Search::setPlayerAndClearHistory(Player pla) {
 }
 
 void Search::setPlayerIfNew(Player pla) {
+  syncRootPlaWithHistory();
   if(pla != rootPla)
     setPlayerAndClearHistory(pla);
+}
+
+void Search::syncRootPlaWithHistory() {
+  if(rootPla != rootHistory.presumedNextMovePla) {
+    clearSearch();
+    rootPla = rootHistory.presumedNextMovePla;
+    rootKoHashTable->recompute(rootHistory);
+    rootGraphHash = GraphHash::getGraphHashFromScratch(
+      rootHistory, rootPla, searchParams.graphSearchRepBound, searchParams.drawEquivalentWinsForWhite
+    );
+  }
 }
 
 void Search::setKomiIfNew(float newKomi) {
@@ -398,6 +410,7 @@ bool Search::makeMove(Loc moveLoc, Player movePla, bool preventEncore) {
   if(!isLegalTolerant(moveLoc,movePla))
     return false;
 
+  syncRootPlaWithHistory();
   if(movePla != rootPla)
     setPlayerAndClearHistory(movePla);
 
@@ -504,6 +517,7 @@ void Search::runWholeSearch(Player movePla, std::function<bool()>* shouldStopEar
 }
 
 void Search::runWholeSearch(Player movePla, bool pondering) {
+  syncRootPlaWithHistory();
   if(movePla != rootPla)
     setPlayerAndClearHistory(movePla);
   std::function<void()>* searchBegun = NULL;
@@ -512,6 +526,7 @@ void Search::runWholeSearch(Player movePla, bool pondering) {
 }
 
 void Search::runWholeSearch(Player movePla, bool pondering, std::function<bool()>* shouldStopEarly) {
+  syncRootPlaWithHistory();
   if(movePla != rootPla)
     setPlayerAndClearHistory(movePla);
   std::function<void()>* searchBegun = NULL;
@@ -789,6 +804,9 @@ void Search::beginSearch(bool pondering) {
   else
     rootGraphHash = Hash128();
 
+  if(rootNode != NULL && ((searchParams.useGraphSearch && rootNode->graphHash != rootGraphHash) || rootNode->nextPla != rootPla || rootNode->isChanceNode))
+    clearSearch();
+
   if(rootNode == NULL) {
     //Avoid storing the root node in the nodeTable, guarantee that it never is part of a cycle, allocate it directly.
     //Also force that it is non-terminal.
@@ -931,7 +949,10 @@ SearchNode* Search::allocateOrFindNode(SearchThread& thread, Player nextPla, Loc
 
     if(insertLoc != nodeMap.end() && insertLoc->first == childHash) {
       //Attempt to transpose to invalid node - rerandomize hash and just store this node somewhere arbitrary.
-      if(insertLoc->second->nextPla != nextPla) {
+      if(insertLoc->second->nextPla != nextPla ||
+         insertLoc->second->forceNonTerminal != forceNonTerminal ||
+         insertLoc->second->isChanceNode != isChanceNode ||
+         (searchParams.useGraphSearch && insertLoc->second->graphHash != graphHash)) {
         childHash = thread.board.pos_hash ^ Hash128(thread.rand.nextUInt64(),thread.rand.nextUInt64());
         continue;
       }
@@ -1323,6 +1344,12 @@ bool Search::playoutDescend(
     thread.shouldCountPlayout = false;
     return false;
   }
+  else if(nodeState == SearchNode::STATE_GROWING1 || nodeState == SearchNode::STATE_GROWING2) {
+    //Another thread is currently expanding the child arrays. Do not use this
+    //intermediate state as a stable snapshot.
+    thread.shouldCountPlayout = false;
+    return false;
+  }
 
   assert(nodeState >= SearchNode::STATE_EXPANDED0);
   //Chance nodes don't have NN output to recompute
@@ -1332,6 +1359,10 @@ bool Search::playoutDescend(
   //Chance nodes use probability sampling instead of PUCT selection
   if(node.isChanceNode) {
     return handleChanceNodeDescend(thread, node, nodeState, isRoot);
+  }
+  if(thread.pla != node.nextPla) {
+    thread.shouldCountPlayout = false;
+    return false;
   }
 
   //Find the best child to descend down
@@ -1439,8 +1470,10 @@ bool Search::playoutDescend(
 
       //Check if we should insert a chance node for flying knife trigger
       if(shouldInsertChanceNode(thread)) {
-        //The chance node's nextPla is the player who just made the move (before the turn flip)
-        Player chancePla = getOpp(thread.pla);
+        //The chance node's nextPla is the player who just made the move.
+        //Do not infer this from thread.pla, since flying-knife sequences can
+        //make the same player move consecutively.
+        Player chancePla = thread.history.moveHistory[thread.history.moveHistory.size()-1].pla;
         //Create the chance node as an intermediate node between current node and child
         float triggerProb = computeTriggerProbability(thread);
         SearchNode* chanceNode = allocateOrFindNode(thread, chancePla, bestChildMoveLoc, forceNonTerminal, thread.graphHash, true, triggerProb);
@@ -1521,7 +1554,10 @@ bool Search::playoutDescend(
     else {
       SearchNodeChildrenReference children = node.getChildren(nodeState);
       child = children[bestChildIdx].getIfAllocated();
-      assert(child != NULL);
+      if(child == NULL) {
+        thread.shouldCountPlayout = false;
+        return false;
+      }
 
       child->virtualLosses.fetch_add(1,std::memory_order_release);
 
