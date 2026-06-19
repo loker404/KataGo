@@ -491,6 +491,17 @@ vector<SearchParams> Setup::loadParams(
     else if(cfg.contains("cpuctUtilityStdevScale"))   params.cpuctUtilityStdevScale = cfg.getDouble("cpuctUtilityStdevScale",        0.0, 1.0);
     else                                              params.cpuctUtilityStdevScale = ((setupFor != SETUP_FOR_DISTRIBUTED && setupFor != SETUP_FOR_OTHER) ? 0.85 : 0.0);
 
+    if(cfg.contains("cpuctUtilityUncertaintyChildBonus"+idxStr)) params.cpuctUtilityUncertaintyChildBonus = cfg.getDouble("cpuctUtilityUncertaintyChildBonus"+idxStr, 0.0, 1000000.0);
+    else if(cfg.contains("cpuctUtilityUncertaintyChildBonus"))   params.cpuctUtilityUncertaintyChildBonus = cfg.getDouble("cpuctUtilityUncertaintyChildBonus",        0.0, 1000000.0);
+    else                                                         params.cpuctUtilityUncertaintyChildBonus = 0.0;
+
+    if(cfg.contains("cpuctUtilityUncertaintyChildBonusDecay"+idxStr)) params.cpuctUtilityUncertaintyChildBonusDecay = cfg.getDouble("cpuctUtilityUncertaintyChildBonusDecay"+idxStr, 0.0, 10.0);
+    else if(cfg.contains("cpuctUtilityUncertaintyChildBonusDecay"))   params.cpuctUtilityUncertaintyChildBonusDecay = cfg.getDouble("cpuctUtilityUncertaintyChildBonusDecay",        0.0, 10.0);
+    else                                                              params.cpuctUtilityUncertaintyChildBonusDecay = 1.0;
+
+    if(cfg.contains("cpuctUtilityUncertaintyChildBonusRootOnly"+idxStr)) params.cpuctUtilityUncertaintyChildBonusRootOnly = cfg.getBool("cpuctUtilityUncertaintyChildBonusRootOnly"+idxStr);
+    else if(cfg.contains("cpuctUtilityUncertaintyChildBonusRootOnly"))   params.cpuctUtilityUncertaintyChildBonusRootOnly = cfg.getBool("cpuctUtilityUncertaintyChildBonusRootOnly");
+    else                                                                 params.cpuctUtilityUncertaintyChildBonusRootOnly = false;
 
     if(cfg.contains("fpuReductionMax"+idxStr)) params.fpuReductionMax = cfg.getDouble("fpuReductionMax"+idxStr, 0.0, 2.0);
     else if(cfg.contains("fpuReductionMax"))   params.fpuReductionMax = cfg.getDouble("fpuReductionMax",        0.0, 2.0);

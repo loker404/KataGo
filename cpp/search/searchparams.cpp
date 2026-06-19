@@ -23,6 +23,9 @@ SearchParams::SearchParams()
    cpuctUtilityStdevPrior(0.25),
    cpuctUtilityStdevPriorWeight(1.0),
    cpuctUtilityStdevScale(0.0),
+   cpuctUtilityUncertaintyChildBonus(0.0),
+   cpuctUtilityUncertaintyChildBonusDecay(1.0),
+   cpuctUtilityUncertaintyChildBonusRootOnly(false),
    fpuReductionMax(0.2),
    fpuLossProp(0.0),
    fpuParentWeightByVisitedPolicy(false),
@@ -139,6 +142,10 @@ bool SearchParams::operator==(const SearchParams& other) const {
     cpuctUtilityStdevPrior == other.cpuctUtilityStdevPrior &&
     cpuctUtilityStdevPriorWeight == other.cpuctUtilityStdevPriorWeight &&
     cpuctUtilityStdevScale == other.cpuctUtilityStdevScale &&
+
+    cpuctUtilityUncertaintyChildBonus == other.cpuctUtilityUncertaintyChildBonus &&
+    cpuctUtilityUncertaintyChildBonusDecay == other.cpuctUtilityUncertaintyChildBonusDecay &&
+    cpuctUtilityUncertaintyChildBonusRootOnly == other.cpuctUtilityUncertaintyChildBonusRootOnly &&
 
     fpuReductionMax == other.fpuReductionMax &&
     fpuLossProp == other.fpuLossProp &&
@@ -394,6 +401,10 @@ json SearchParams::changeableParametersToJson() const {
   ret["cpuctUtilityStdevPriorWeight"] = cpuctUtilityStdevPriorWeight;
   ret["cpuctUtilityStdevScale"] = cpuctUtilityStdevScale;
 
+  ret["cpuctUtilityUncertaintyChildBonus"] = cpuctUtilityUncertaintyChildBonus;
+  ret["cpuctUtilityUncertaintyChildBonusDecay"] = cpuctUtilityUncertaintyChildBonusDecay;
+  ret["cpuctUtilityUncertaintyChildBonusRootOnly"] = cpuctUtilityUncertaintyChildBonusRootOnly;
+
   ret["fpuReductionMax"] = fpuReductionMax;
   ret["fpuLossProp"] = fpuLossProp;
 
@@ -541,6 +552,10 @@ void SearchParams::printParams(std::ostream& out) const {
   PRINTPARAM(cpuctUtilityStdevPrior);
   PRINTPARAM(cpuctUtilityStdevPriorWeight);
   PRINTPARAM(cpuctUtilityStdevScale);
+
+  PRINTPARAM(cpuctUtilityUncertaintyChildBonus);
+  PRINTPARAM(cpuctUtilityUncertaintyChildBonusDecay);
+  PRINTPARAM(cpuctUtilityUncertaintyChildBonusRootOnly);
 
   PRINTPARAM(fpuReductionMax);
   PRINTPARAM(fpuLossProp);

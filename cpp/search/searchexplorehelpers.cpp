@@ -40,7 +40,8 @@ double Search::getExploreSelectionValue(
   double nnPolicyProb,
   double childWeight,
   double childUtility,
-  Player pla
+  Player pla,
+  double bonus
 ) const {
   if(nnPolicyProb < 0)
     return POLICY_ILLEGAL_SELECTION_VALUE;
@@ -50,7 +51,7 @@ double Search::getExploreSelectionValue(
   //At the last moment, adjust value to be from the player's perspective, so that players prefer values in their favor
   //rather than in white's favor
   double valueComponent = pla == P_WHITE ? childUtility : -childUtility;
-  return exploreComponent + valueComponent;
+  return exploreComponent + valueComponent + bonus;
 }
 
 //Return the childWeight that would make Search::getExploreSelectionValue return the given explore selection value.
@@ -60,13 +61,14 @@ double Search::getExploreSelectionValueInverse(
   double exploreScaling,
   double nnPolicyProb,
   double childUtility,
-  Player pla
+  Player pla,
+  double bonus
 ) const {
   if(nnPolicyProb < 0)
     return 0;
   double valueComponent = pla == P_WHITE ? childUtility : -childUtility;
 
-  double exploreComponent = exploreSelectionValue - valueComponent;
+  double exploreComponent = exploreSelectionValue - valueComponent - bonus;
   double exploreComponentScaling = exploreScaling * nnPolicyProb;
 
   //Guard against float weirdness
@@ -95,6 +97,35 @@ static void maybeApplyWideRootNoise(
     else
       childUtility -= bonus;
   }
+}
+
+double Search::computeChildOpponentUncertaintyBonus(
+  const SearchNode& parent, const SearchNode* child, double childWeight
+) const {
+  if(searchParams.cpuctUtilityUncertaintyChildBonus == 0.0)
+    return 0.0;
+  if(searchParams.cpuctUtilityUncertaintyChildBonusRootOnly && &parent != rootNode)
+    return 0.0;
+  if(parent.nextPla != rootPla)
+    return 0.0;
+  if(child == NULL)
+    return 0.0;
+  if(childWeight <= 0.0)
+    return 0.0;
+  if(nnEvaluator == NULL || !nnEvaluator->supportsShorttermError())
+    return 0.0;
+
+  const NNOutput* nnOutput = child->getNNOutput();
+  if(nnOutput == NULL)
+    return 0.0;
+
+  double utilityUncertaintyWL = searchParams.winLossUtilityFactor * nnOutput->shorttermWinlossError;
+  double utilityUncertaintyScore = getApproxScoreUtilityDerivative((double)nnOutput->whiteScoreMean) * nnOutput->shorttermScoreError;
+  double utilityUncertainty = utilityUncertaintyWL + utilityUncertaintyScore;
+
+  return searchParams.cpuctUtilityUncertaintyChildBonus *
+         utilityUncertainty / searchParams.cpuctUtilityStdevPrior /
+         (1.0 + searchParams.cpuctUtilityUncertaintyChildBonusDecay * sqrt(childWeight));
 }
 
 
@@ -138,6 +169,8 @@ double Search::getExploreSelectionValueOfChild(
     if(endingScoreBonus != 0)
       childUtility += getScoreUtilityDiff(scoreMeanAvg, scoreMeanSqAvg, endingScoreBonus);
   }
+
+  double uncertaintyBonus = computeChildOpponentUncertaintyBonus(parent, child, childWeight);
 
   //Virtual losses to direct threads down different paths
   if(childVirtualLosses > 0) {
@@ -194,7 +227,7 @@ double Search::getExploreSelectionValueOfChild(
     maybeApplyAntiMirrorForcedExplore(childUtility, parentUtility, moveLoc, parentPolicyProbs, childWeight, totalChildWeight, parent.nextPla, thread, parent);
   }
 
-  return getExploreSelectionValue(exploreScaling,nnPolicyProb,childWeight,childUtility,parent.nextPla);
+  return getExploreSelectionValue(exploreScaling,nnPolicyProb,childWeight,childUtility,parent.nextPla,uncertaintyBonus);
 }
 
 double Search::getNewExploreSelectionValue(
@@ -254,8 +287,10 @@ double Search::getReducedPlaySelectionWeight(
   if(endingScoreBonus != 0)
     childUtility += getScoreUtilityDiff(scoreMeanAvg, scoreMeanSqAvg, endingScoreBonus);
 
+  double uncertaintyBonus = computeChildOpponentUncertaintyBonus(parent, child, childWeight);
+
   double childWeightWeRetrospectivelyWanted = getExploreSelectionValueInverse(
-    bestChildExploreSelectionValue, exploreScaling, nnPolicyProb, childUtility, parent.nextPla
+    bestChildExploreSelectionValue, exploreScaling, nnPolicyProb, childUtility, parent.nextPla, uncertaintyBonus
   );
   if(childWeight > childWeightWeRetrospectivelyWanted)
     return childWeightWeRetrospectivelyWanted;

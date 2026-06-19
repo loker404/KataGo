@@ -550,14 +550,16 @@ private:
     double nnPolicyProb,
     double childWeight,
     double childUtility,
-    Player pla
+    Player pla,
+    double bonus = 0.0
   ) const;
   double getExploreSelectionValueInverse(
-    double exploreScaling,
     double exploreSelectionValue,
+    double exploreScaling,
     double nnPolicyProb,
     double childUtility,
-    Player pla
+    Player pla,
+    double bonus = 0.0
   ) const;
   double getExploreSelectionValueOfChild(
     const SearchNode& parent, const float* parentPolicyProbs, const SearchNode* child,
@@ -585,6 +587,10 @@ private:
     double exploreScaling,
     int64_t childEdgeVisits,
     double bestChildExploreSelectionValue
+  ) const;
+
+  double computeChildOpponentUncertaintyBonus(
+    const SearchNode& parent, const SearchNode* child, double childWeight
   ) const;
 
   double getFpuValueForChildrenAssumeVisited(
