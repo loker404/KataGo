@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [ master ]
+    branches: ['**']
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -48,7 +48,6 @@ jobs:
         ./katago runtests
 
     - name: Upload artifact
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: katago-linux-opencl
@@ -91,7 +90,6 @@ jobs:
         run: |
           ./katago runtests
       - name: Upload artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
           name: katago-macos-opencl
@@ -150,7 +148,6 @@ jobs:
           ./katago runtests
 
       - name: Upload artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@v4
         with:
           name: katago-macos-metal
@@ -206,7 +203,6 @@ jobs:
         Release/katago.exe runtests
 
     - name: Upload artifact
-      if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       uses: actions/upload-artifact@v4
       with:
         name: katago-windows-opencl
