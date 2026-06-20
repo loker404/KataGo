@@ -113,20 +113,28 @@ double Search::computeChildOpponentUncertaintyBonus(
   if(childWeight <= 0.0)
     return 0.0;
 
-  const NNOutput* nnOutput = child->getNNOutput();
-  if(nnOutput == NULL)
-    return 0.0;
-
   double decay = 1.0 + searchParams.cpuctUtilityChildBonusDecay * sqrt(childWeight);
   double bonus = 0.0;
 
   if(searchParams.cpuctUtilityScoreStdevChildBonus != 0.0) {
-    double scoreStdev = ScoreValue::getScoreStdev((double)nnOutput->whiteScoreMean, (double)nnOutput->whiteScoreMeanSq);
-    //Use the raw score-value derivative, independent of static/dynamic score utility factors,
-    //so that the score stdev bonus reflects position complexity rather than the engine's score preference.
+    double scoreStdev;
+    if(searchParams.cpuctUtilityChildBonusRootOnly) {
+      double childScoreMeanAvg = child->stats.scoreMeanAvg.load(std::memory_order_acquire);
+      double childScoreMeanSqAvg = child->stats.scoreMeanSqAvg.load(std::memory_order_acquire);
+      scoreStdev = ScoreValue::getScoreStdev(childScoreMeanAvg, childScoreMeanSqAvg);
+    }
+    else {
+      const NNOutput* nnOutput = child->getNNOutput();
+      if(nnOutput == NULL)
+        return 0.0;
+      scoreStdev = ScoreValue::getScoreStdev((double)nnOutput->whiteScoreMean, (double)nnOutput->whiteScoreMeanSq);
+    }
+    //Use the score-value derivative at scoreMean=0, independent of the current score lead,
+    //so that the score stdev bonus reflects raw position complexity rather than being
+    //suppressed in won/lost positions.
     double sqrtBoardArea = rootBoard.sqrtBoardArea();
     double scoreValueDerivative = ScoreValue::whiteDScoreValueDScoreSmoothNoDrawAdjust(
-      (double)nnOutput->whiteScoreMean, 0.0, 2.0, sqrtBoardArea
+      0.0, 0.0, 2.0, sqrtBoardArea
     );
     double utilityScoreStdev = scoreValueDerivative * scoreStdev;
     bonus += searchParams.cpuctUtilityScoreStdevChildBonus *
@@ -134,9 +142,20 @@ double Search::computeChildOpponentUncertaintyBonus(
   }
 
   if(searchParams.cpuctUtilityUncertaintyChildBonus != 0.0 && nnEvaluator != NULL && nnEvaluator->supportsShorttermError()) {
-    double utilityUncertaintyWL = searchParams.winLossUtilityFactor * nnOutput->shorttermWinlossError;
-    double utilityUncertaintyScore = getApproxScoreUtilityDerivative((double)nnOutput->whiteScoreMean) * nnOutput->shorttermScoreError;
-    double utilityUncertainty = utilityUncertaintyWL + utilityUncertaintyScore;
+    double utilityUncertainty;
+    if(searchParams.cpuctUtilityChildBonusRootOnly) {
+      double childUtilityAvg = child->stats.utilityAvg.load(std::memory_order_acquire);
+      double childUtilitySqAvg = child->stats.utilitySqAvg.load(std::memory_order_acquire);
+      utilityUncertainty = sqrt(std::max(0.0, childUtilitySqAvg - childUtilityAvg * childUtilityAvg));
+    }
+    else {
+      const NNOutput* nnOutput = child->getNNOutput();
+      if(nnOutput == NULL)
+        return 0.0;
+      double utilityUncertaintyWL = searchParams.winLossUtilityFactor * nnOutput->shorttermWinlossError;
+      double utilityUncertaintyScore = getApproxScoreUtilityDerivative((double)nnOutput->whiteScoreMean) * nnOutput->shorttermScoreError;
+      utilityUncertainty = utilityUncertaintyWL + utilityUncertaintyScore;
+    }
     bonus += searchParams.cpuctUtilityUncertaintyChildBonus *
              utilityUncertainty / searchParams.cpuctUtilityStdevPrior / decay;
   }
