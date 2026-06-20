@@ -102,30 +102,46 @@ static void maybeApplyWideRootNoise(
 double Search::computeChildOpponentUncertaintyBonus(
   const SearchNode& parent, const SearchNode* child, double childWeight
 ) const {
-  if(searchParams.cpuctUtilityUncertaintyChildBonus == 0.0)
+  if(searchParams.cpuctUtilityUncertaintyChildBonus == 0.0 && searchParams.cpuctUtilityScoreStdevChildBonus == 0.0)
     return 0.0;
-  if(searchParams.cpuctUtilityUncertaintyChildBonusRootOnly && &parent != rootNode)
+  if(searchParams.cpuctUtilityChildBonusRootOnly && &parent != rootNode)
     return 0.0;
-  if(parent.nextPla != rootPla)
+  if(!searchParams.cpuctUtilityChildBonusBothSides && parent.nextPla != rootPla)
     return 0.0;
   if(child == NULL)
     return 0.0;
   if(childWeight <= 0.0)
-    return 0.0;
-  if(nnEvaluator == NULL || !nnEvaluator->supportsShorttermError())
     return 0.0;
 
   const NNOutput* nnOutput = child->getNNOutput();
   if(nnOutput == NULL)
     return 0.0;
 
-  double utilityUncertaintyWL = searchParams.winLossUtilityFactor * nnOutput->shorttermWinlossError;
-  double utilityUncertaintyScore = getApproxScoreUtilityDerivative((double)nnOutput->whiteScoreMean) * nnOutput->shorttermScoreError;
-  double utilityUncertainty = utilityUncertaintyWL + utilityUncertaintyScore;
+  double decay = 1.0 + searchParams.cpuctUtilityChildBonusDecay * sqrt(childWeight);
+  double bonus = 0.0;
 
-  return searchParams.cpuctUtilityUncertaintyChildBonus *
-         utilityUncertainty / searchParams.cpuctUtilityStdevPrior /
-         (1.0 + searchParams.cpuctUtilityUncertaintyChildBonusDecay * sqrt(childWeight));
+  if(searchParams.cpuctUtilityScoreStdevChildBonus != 0.0) {
+    double scoreStdev = ScoreValue::getScoreStdev((double)nnOutput->whiteScoreMean, (double)nnOutput->whiteScoreMeanSq);
+    //Use the raw score-value derivative, independent of static/dynamic score utility factors,
+    //so that the score stdev bonus reflects position complexity rather than the engine's score preference.
+    double sqrtBoardArea = rootBoard.sqrtBoardArea();
+    double scoreValueDerivative = ScoreValue::whiteDScoreValueDScoreSmoothNoDrawAdjust(
+      (double)nnOutput->whiteScoreMean, 0.0, 2.0, sqrtBoardArea
+    );
+    double utilityScoreStdev = scoreValueDerivative * scoreStdev;
+    bonus += searchParams.cpuctUtilityScoreStdevChildBonus *
+             utilityScoreStdev / searchParams.cpuctUtilityStdevPrior / decay;
+  }
+
+  if(searchParams.cpuctUtilityUncertaintyChildBonus != 0.0 && nnEvaluator != NULL && nnEvaluator->supportsShorttermError()) {
+    double utilityUncertaintyWL = searchParams.winLossUtilityFactor * nnOutput->shorttermWinlossError;
+    double utilityUncertaintyScore = getApproxScoreUtilityDerivative((double)nnOutput->whiteScoreMean) * nnOutput->shorttermScoreError;
+    double utilityUncertainty = utilityUncertaintyWL + utilityUncertaintyScore;
+    bonus += searchParams.cpuctUtilityUncertaintyChildBonus *
+             utilityUncertainty / searchParams.cpuctUtilityStdevPrior / decay;
+  }
+
+  return bonus;
 }
 
 

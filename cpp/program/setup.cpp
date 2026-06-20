@@ -495,13 +495,21 @@ vector<SearchParams> Setup::loadParams(
     else if(cfg.contains("cpuctUtilityUncertaintyChildBonus"))   params.cpuctUtilityUncertaintyChildBonus = cfg.getDouble("cpuctUtilityUncertaintyChildBonus",        0.0, 1000000.0);
     else                                                         params.cpuctUtilityUncertaintyChildBonus = 0.0;
 
-    if(cfg.contains("cpuctUtilityUncertaintyChildBonusDecay"+idxStr)) params.cpuctUtilityUncertaintyChildBonusDecay = cfg.getDouble("cpuctUtilityUncertaintyChildBonusDecay"+idxStr, 0.0, 10.0);
-    else if(cfg.contains("cpuctUtilityUncertaintyChildBonusDecay"))   params.cpuctUtilityUncertaintyChildBonusDecay = cfg.getDouble("cpuctUtilityUncertaintyChildBonusDecay",        0.0, 10.0);
-    else                                                              params.cpuctUtilityUncertaintyChildBonusDecay = 1.0;
+    if(cfg.contains("cpuctUtilityChildBonusDecay"+idxStr)) params.cpuctUtilityChildBonusDecay = cfg.getDouble("cpuctUtilityChildBonusDecay"+idxStr, 0.0, 10.0);
+    else if(cfg.contains("cpuctUtilityChildBonusDecay"))   params.cpuctUtilityChildBonusDecay = cfg.getDouble("cpuctUtilityChildBonusDecay",        0.0, 10.0);
+    else                                                   params.cpuctUtilityChildBonusDecay = 1.0;
 
-    if(cfg.contains("cpuctUtilityUncertaintyChildBonusRootOnly"+idxStr)) params.cpuctUtilityUncertaintyChildBonusRootOnly = cfg.getBool("cpuctUtilityUncertaintyChildBonusRootOnly"+idxStr);
-    else if(cfg.contains("cpuctUtilityUncertaintyChildBonusRootOnly"))   params.cpuctUtilityUncertaintyChildBonusRootOnly = cfg.getBool("cpuctUtilityUncertaintyChildBonusRootOnly");
-    else                                                                 params.cpuctUtilityUncertaintyChildBonusRootOnly = false;
+    if(cfg.contains("cpuctUtilityChildBonusRootOnly"+idxStr)) params.cpuctUtilityChildBonusRootOnly = cfg.getBool("cpuctUtilityChildBonusRootOnly"+idxStr);
+    else if(cfg.contains("cpuctUtilityChildBonusRootOnly"))   params.cpuctUtilityChildBonusRootOnly = cfg.getBool("cpuctUtilityChildBonusRootOnly");
+    else                                                      params.cpuctUtilityChildBonusRootOnly = false;
+
+    if(cfg.contains("cpuctUtilityChildBonusBothSides"+idxStr)) params.cpuctUtilityChildBonusBothSides = cfg.getBool("cpuctUtilityChildBonusBothSides"+idxStr);
+    else if(cfg.contains("cpuctUtilityChildBonusBothSides"))   params.cpuctUtilityChildBonusBothSides = cfg.getBool("cpuctUtilityChildBonusBothSides");
+    else                                                       params.cpuctUtilityChildBonusBothSides = false;
+
+    if(cfg.contains("cpuctUtilityScoreStdevChildBonus"+idxStr)) params.cpuctUtilityScoreStdevChildBonus = cfg.getDouble("cpuctUtilityScoreStdevChildBonus"+idxStr, 0.0, 1000000.0);
+    else if(cfg.contains("cpuctUtilityScoreStdevChildBonus"))   params.cpuctUtilityScoreStdevChildBonus = cfg.getDouble("cpuctUtilityScoreStdevChildBonus",        0.0, 1000000.0);
+    else                                                        params.cpuctUtilityScoreStdevChildBonus = 0.0;
 
     if(cfg.contains("fpuReductionMax"+idxStr)) params.fpuReductionMax = cfg.getDouble("fpuReductionMax"+idxStr, 0.0, 2.0);
     else if(cfg.contains("fpuReductionMax"))   params.fpuReductionMax = cfg.getDouble("fpuReductionMax",        0.0, 2.0);

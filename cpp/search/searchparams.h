@@ -27,8 +27,10 @@ struct SearchParams {
   double cpuctUtilityStdevScale;
 
   double cpuctUtilityUncertaintyChildBonus;
-  double cpuctUtilityUncertaintyChildBonusDecay;
-  bool cpuctUtilityUncertaintyChildBonusRootOnly;
+  double cpuctUtilityChildBonusDecay;
+  bool cpuctUtilityChildBonusRootOnly;
+  bool cpuctUtilityChildBonusBothSides;
+  double cpuctUtilityScoreStdevChildBonus;
 
   double fpuReductionMax;   //Max amount to reduce fpu value for unexplore children
   double fpuLossProp; //Scale fpu this proportion of the way towards assuming a move is a loss.

@@ -24,8 +24,10 @@ SearchParams::SearchParams()
    cpuctUtilityStdevPriorWeight(1.0),
    cpuctUtilityStdevScale(0.0),
    cpuctUtilityUncertaintyChildBonus(0.0),
-   cpuctUtilityUncertaintyChildBonusDecay(1.0),
-   cpuctUtilityUncertaintyChildBonusRootOnly(false),
+   cpuctUtilityChildBonusDecay(1.0),
+   cpuctUtilityChildBonusRootOnly(false),
+   cpuctUtilityChildBonusBothSides(false),
+   cpuctUtilityScoreStdevChildBonus(0.0),
    fpuReductionMax(0.2),
    fpuLossProp(0.0),
    fpuParentWeightByVisitedPolicy(false),
@@ -144,8 +146,10 @@ bool SearchParams::operator==(const SearchParams& other) const {
     cpuctUtilityStdevScale == other.cpuctUtilityStdevScale &&
 
     cpuctUtilityUncertaintyChildBonus == other.cpuctUtilityUncertaintyChildBonus &&
-    cpuctUtilityUncertaintyChildBonusDecay == other.cpuctUtilityUncertaintyChildBonusDecay &&
-    cpuctUtilityUncertaintyChildBonusRootOnly == other.cpuctUtilityUncertaintyChildBonusRootOnly &&
+    cpuctUtilityChildBonusDecay == other.cpuctUtilityChildBonusDecay &&
+    cpuctUtilityChildBonusRootOnly == other.cpuctUtilityChildBonusRootOnly &&
+    cpuctUtilityChildBonusBothSides == other.cpuctUtilityChildBonusBothSides &&
+    cpuctUtilityScoreStdevChildBonus == other.cpuctUtilityScoreStdevChildBonus &&
 
     fpuReductionMax == other.fpuReductionMax &&
     fpuLossProp == other.fpuLossProp &&
@@ -402,8 +406,10 @@ json SearchParams::changeableParametersToJson() const {
   ret["cpuctUtilityStdevScale"] = cpuctUtilityStdevScale;
 
   ret["cpuctUtilityUncertaintyChildBonus"] = cpuctUtilityUncertaintyChildBonus;
-  ret["cpuctUtilityUncertaintyChildBonusDecay"] = cpuctUtilityUncertaintyChildBonusDecay;
-  ret["cpuctUtilityUncertaintyChildBonusRootOnly"] = cpuctUtilityUncertaintyChildBonusRootOnly;
+  ret["cpuctUtilityChildBonusDecay"] = cpuctUtilityChildBonusDecay;
+  ret["cpuctUtilityChildBonusRootOnly"] = cpuctUtilityChildBonusRootOnly;
+  ret["cpuctUtilityChildBonusBothSides"] = cpuctUtilityChildBonusBothSides;
+  ret["cpuctUtilityScoreStdevChildBonus"] = cpuctUtilityScoreStdevChildBonus;
 
   ret["fpuReductionMax"] = fpuReductionMax;
   ret["fpuLossProp"] = fpuLossProp;
@@ -554,8 +560,10 @@ void SearchParams::printParams(std::ostream& out) const {
   PRINTPARAM(cpuctUtilityStdevScale);
 
   PRINTPARAM(cpuctUtilityUncertaintyChildBonus);
-  PRINTPARAM(cpuctUtilityUncertaintyChildBonusDecay);
-  PRINTPARAM(cpuctUtilityUncertaintyChildBonusRootOnly);
+  PRINTPARAM(cpuctUtilityChildBonusDecay);
+  PRINTPARAM(cpuctUtilityChildBonusRootOnly);
+  PRINTPARAM(cpuctUtilityChildBonusBothSides);
+  PRINTPARAM(cpuctUtilityScoreStdevChildBonus);
 
   PRINTPARAM(fpuReductionMax);
   PRINTPARAM(fpuLossProp);
