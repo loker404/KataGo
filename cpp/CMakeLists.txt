@@ -553,7 +553,7 @@ endif()
 set(BUILD_DISTRIBUTED 0 CACHE BOOL "Build with http support for contributing to distributed training")
 set(USE_BACKEND CACHE STRING "Neural net backend")
 string(TOUPPER "${USE_BACKEND}" USE_BACKEND)
-set_property(CACHE USE_BACKEND PROPERTY STRINGS "" CUDA TENSORRT OPENCL EIGEN METAL ONNX ROCM)
+set_property(CACHE USE_BACKEND PROPERTY STRINGS "" CUDA TENSORRT OPENCL EIGEN METAL ONNX ROCM MACA)
 
 set(USE_TCMALLOC 0 CACHE BOOL "Use TCMalloc")
 set(NO_GIT_REVISION 0 CACHE BOOL "Disable embedding the git revision into the compiled exe")
@@ -849,8 +849,55 @@ elseif(USE_BACKEND STREQUAL "ROCM")
     neuralnet/rocmhelpers.hip
   )
 
+# --------------------------- MACA backend (MetaX GPUs, cu-bridge CUDA-compatible layer) --------
+elseif(USE_BACKEND STREQUAL "MACA")
+  message(STATUS "-DUSE_BACKEND=MACA, using MACA (MetaX) CUDA-compatible backend.")
+
+  find_program(METAX_CUCC cucc HINTS /opt/maca/tools/cu-bridge/bin /opt/maca/bin)
+  if(NOT METAX_CUCC)
+    message(FATAL_ERROR "cucc (MACA CUDA compiler) not found. Set PATH or install MACA SDK.")
+  endif()
+
+  set(METAX_INCLUDE_DIRS
+    /opt/maca/include
+    /opt/maca/include/mcr
+    /opt/maca/include/common
+    /opt/maca/tools/cu-bridge/include
+  )
+  set(METAX_LIB_DIRS
+    /opt/maca/lib64
+    /opt/maca/lib
+  )
+
+  include_directories(SYSTEM ${METAX_INCLUDE_DIRS})
+
+  # cudabackend.cpp / cudautils.cpp compile as host C++ against the cu-bridge compatibility
+  # headers (CUDA spellings), exactly like the official CUDA backend does against the CUDA toolkit.
+  # The SDPA path in cudabackend.cpp is gated on CUDNN_VERSION >= 8903; MACA's cu-bridge cudnn.h
+  # reports CUDNN_VERSION 8.4.x so it automatically compiles to the fallback custom attention kernels.
+  # cudahelpers.cu needs the MACA device compiler (cucc, an nvcc-compatible clang-based driver).
+  set(NEURALNET_BACKEND_SOURCES
+    neuralnet/cudabackend.cpp
+    neuralnet/cudautils.cpp
+  )
+  set(CUDAHELPERS_O ${CMAKE_CURRENT_BINARY_DIR}/cudahelpers.cu.o)
+  add_custom_command(
+    OUTPUT ${CUDAHELPERS_O}
+    COMMAND ${METAX_CUCC} -c ${CMAKE_CURRENT_SOURCE_DIR}/neuralnet/cudahelpers.cu
+      -o ${CUDAHELPERS_O} -fPIE
+      -I/opt/maca/include
+      -I/opt/maca/include/mcr
+      -I/opt/maca/include/common
+      -I/opt/maca/tools/cu-bridge/include
+      -I${CMAKE_CURRENT_SOURCE_DIR}
+      -I${CMAKE_CURRENT_SOURCE_DIR}/external
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/neuralnet/cudahelpers.cu
+    COMMENT "Compiling cudahelpers.cu with cucc (MACA)"
+  )
+  list(APPEND NEURALNET_BACKEND_SOURCES ${CUDAHELPERS_O})
+
 elseif(USE_BACKEND STREQUAL "")
-  message(WARNING "${ColorBoldRed}WARNING: Using dummy neural net backend, intended for non-neural-net testing only, will fail on any code path requiring a neural net. To use neural net, specify -DUSE_BACKEND=CUDA or -DUSE_BACKEND=TENSORRT or -DUSE_BACKEND=OPENCL or -DUSE_BACKEND=EIGEN or -DUSE_BACKEND=ONNX or -DUSE_BACKEND=ROCM to compile with the respective backend.${ColorReset}")
+  message(WARNING "${ColorBoldRed}WARNING: Using dummy neural net backend, intended for non-neural-net testing only, will fail on any code path requiring a neural net. To use neural net, specify -DUSE_BACKEND=CUDA or -DUSE_BACKEND=TENSORRT or -DUSE_BACKEND=OPENCL or -DUSE_BACKEND=EIGEN or -DUSE_BACKEND=ONNX or -DUSE_BACKEND=ROCM or -DUSE_BACKEND=MACA to compile with the respective backend.${ColorReset}")
   set(NEURALNET_BACKEND_SOURCES neuralnet/dummybackend.cpp)
 else()
   message(FATAL_ERROR "Unrecognized backend: " ${USE_BACKEND})
@@ -1074,6 +1121,26 @@ if(USE_BACKEND STREQUAL "CUDA")
   # cudnn_frontend's experimental OSS engine headers reference NVRTC symbols at link time
   # (we don't actually use those engines, but the references are pulled in by the header-only includes).
   target_link_libraries(katago CUDA::cublas ${CUDNN_LIBRARY} CUDA::nvrtc)
+elseif(USE_BACKEND STREQUAL "MACA")
+  target_compile_definitions(katago PRIVATE USE_CUDA_BACKEND)
+  # MACA's cu-bridge exposes the CUDA 11.6-era API surface; nneval/setup use this only in
+  # informational strings shown at startup.
+  target_compile_definitions(katago PRIVATE CUDA_TARGET_VERSION=11060)
+  include_directories(SYSTEM ${METAX_INCLUDE_DIRS})
+
+  find_library(MCBLAS_LIB mcblas HINTS /opt/maca/lib64 /opt/maca/lib NO_DEFAULT_PATH)
+  find_library(MCDNN_LIB mcdnn HINTS /opt/maca/lib64 /opt/maca/lib NO_DEFAULT_PATH)
+  find_library(MCRUNTIME_LIB mcruntime HINTS /opt/maca/lib64 /opt/maca/lib NO_DEFAULT_PATH)
+  find_library(MCCOMPILER_LIB mccompiler HINTS /opt/maca/lib64 /opt/maca/lib NO_DEFAULT_PATH)
+  find_library(CUDA_CU_LIB cuda HINTS /opt/maca/tools/cu-bridge/lib /opt/maca/lib NO_DEFAULT_PATH)
+  find_library(RUNTIME_CU_LIB runtime_cu HINTS /opt/maca/lib /opt/maca/lib64 NO_DEFAULT_PATH)
+  find_library(SYMBOL_CU_LIB symbol_cu HINTS /opt/maca/lib /opt/maca/lib64 NO_DEFAULT_PATH)
+  if(NOT MCBLAS_LIB OR NOT MCDNN_LIB OR NOT MCRUNTIME_LIB OR NOT MCCOMPILER_LIB OR NOT CUDA_CU_LIB OR NOT RUNTIME_CU_LIB OR NOT SYMBOL_CU_LIB)
+    message(FATAL_ERROR "${ColorBoldRed} One or more MACA libraries were not found under /opt/maca. Check that the MACA SDK is properly installed. ${ColorReset}")
+  endif()
+  target_link_libraries(katago
+    ${MCBLAS_LIB} ${MCDNN_LIB} ${MCRUNTIME_LIB} ${MCCOMPILER_LIB} ${CUDA_CU_LIB} ${RUNTIME_CU_LIB} ${SYMBOL_CU_LIB}
+  )
 elseif(USE_BACKEND STREQUAL "TENSORRT")
   target_compile_definitions(katago PRIVATE USE_TENSORRT_BACKEND)
   find_package(CUDAToolkit REQUIRED)
